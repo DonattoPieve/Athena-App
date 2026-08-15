@@ -203,6 +203,62 @@ body {
   padding: 0;
   font-size: 1.067rem;
 }
+/* Etiqueta da linguagem no canto do bloco — vem do data-lang que o
+   CodeBlock escreve. Sem ela, so quem escreveu a nota sabe se aquilo e C,
+   Python ou pseudocodigo. */
+.prose pre[data-lang] {
+  position: relative;
+  padding-top: 1.7rem;
+}
+.prose pre[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 0.45rem;
+  right: 0.75rem;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8c8c96;
+}
+
+/* Realce de sintaxe — VS Code Dark+, as MESMAS regras do
+   athena-web/src/app/globals.css. Copiar em vez de importar mantem o app
+   independente do build do site; mexeu la, mexa aqui. */
+.hljs-comment,
+.hljs-quote { color: #6a9955; font-style: italic; }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-name { color: #569cd6; }
+.hljs-string,
+.hljs-attr,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta-string { color: #ce9178; }
+.hljs-number,
+.hljs-literal,
+.hljs-boolean { color: #b5cea8; }
+.hljs-title,
+.hljs-title.function_,
+.hljs-section { color: #dcdcaa; }
+.hljs-title.class_,
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-built_in { color: #4ec9b0; }
+.hljs-variable,
+.hljs-template-variable,
+.hljs-params,
+.hljs-attribute { color: #9cdcfe; }
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link { color: #4fc1ff; }
+.hljs-meta,
+.hljs-meta .hljs-keyword { color: #c586c0; }
+.hljs-deletion { color: #f44747; }
+.hljs-operator,
+.hljs-punctuation { color: #d4d4d4; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }
 .prose table {
   width: 100%;
   font-size: 1.038rem;
@@ -580,23 +636,326 @@ body {
   background: var(--c-surface);
   color: var(--c-text);
 }
+/* ------------------------------------------------------------------
+   Home — mesma linguagem do athena-web: hero com brilho radial, cartoes
+   de numero com sparkline, materias com barra de proporcao.
+   ------------------------------------------------------------------ */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 26px 28px;
+}
+.hero-brilho {
+  position: absolute;
+  inset: 0;
+  opacity: 0.6;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 100% at 80% 30%,
+    color-mix(in srgb, var(--sv-glow, var(--c-accent)) 18%, transparent),
+    transparent 60%
+  );
+}
+.hero-conteudo {
+  position: relative;
+}
+.hero-titulo {
+  margin: 6px 0 8px;
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.stat {
+  padding: 14px 16px;
+}
+.stat-n {
+  font-size: 1.9rem;
+  font-weight: 600;
+  line-height: 1;
+}
+.stat-rotulo {
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+.stat-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--c-accent);
+}
+.spark {
+  display: block;
+  width: 100%;
+  height: 20px;
+  margin-top: 8px;
+}
+
+.materia {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--c-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.materia:hover {
+  border-color: color-mix(in srgb, var(--c-accent) 40%, transparent);
+  background: var(--c-surface);
+}
+.materia-code {
+  flex: 0 0 auto;
+  color: var(--c-accent);
+  font-weight: 600;
+}
+.materia-nome {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--c-muted);
+}
+.materia-barra {
+  flex: 1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--c-surface);
+  overflow: hidden;
+}
+.materia-barra > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--c-accent);
+  opacity: 0.75;
+}
+.materia-n {
+  flex: 0 0 auto;
+  min-width: 18px;
+  text-align: right;
+  color: var(--c-muted);
+}
+
+.duas-colunas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.busca-lista {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  padding: 5px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+/* ------------------------------------------------------------------
+   Layout de IDE: divisoria arrastavel + barra de abas.
+   ------------------------------------------------------------------ */
+/* Barra de atividade: so icone, largura fixa. Troca o painel da lateral e,
+   no ultimo botao, o lado em que a lateral inteira fica. */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 0;
+  border-right: 1px solid var(--c-border);
+  background: var(--c-bg);
+}
+.rail:last-child {
+  border-right: none;
+  border-left: 1px solid var(--c-border);
+}
+.rail-btn {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: color 140ms, background-color 140ms;
+}
+.rail-btn:hover {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.rail-btn[data-active="true"] {
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+}
+.rail-fim {
+  margin-top: auto;
+}
+.rail-icone {
+  width: 18px;
+  height: 18px;
+}
+
+.splitter {
+  cursor: col-resize;
+  background: var(--c-border);
+  transition: background-color 140ms;
+}
+.splitter:hover,
+.splitter:active {
+  background: var(--c-accent);
+}
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 0 0 auto;
+}
+.tabs::-webkit-scrollbar {
+  height: 0;
+}
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--c-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.tab:hover {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.tab[data-active="true"] {
+  background: var(--c-surface);
+  border-bottom-color: var(--c-accent);
+  color: var(--c-accent);
+}
+.tab-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* O X so aparece na aba ativa ou sob o mouse — barra cheia de X vira ruido. */
+.tab-x {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+}
+.tab:hover .tab-x,
+.tab[data-active="true"] .tab-x {
+  opacity: 0.65;
+}
+.tab-x:hover {
+  background: var(--c-card);
+  opacity: 1;
+}
+.tab-add {
+  align-self: center;
+  margin-left: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-muted);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.tab-add:hover {
+  background: var(--c-surface);
+  color: var(--c-accent);
+}
+
+/* Arvore de arquivos: pasta e arquivo com icone, como qualquer explorador.
+   Antes eram as letras "v" e ">" — economicas e ilegiveis. */
+.tree-icon {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  opacity: 0.75;
+}
+.tree-chevron {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  opacity: 0.55;
+  transition: transform 120ms;
+}
+.tree-chevron[data-open="true"] {
+  transform: rotate(90deg);
+}
+.nav-item[data-dir="true"] .tree-icon {
+  color: var(--c-accent);
+}
+
 .nav-item[data-active="true"] {
   background: var(--c-accent-light);
   color: var(--c-accent);
   font-weight: 500;
 }
 
+/* Log da sessao. Era roxo (--c-code-bg) e destoava de todo o resto da
+   interface, alem de vazar do cartao em linha longa. Agora usa os tokens
+   normais de superficie e fica contido. */
 pre.term {
-  background: var(--c-code-bg);
-  color: var(--c-code-text);
+  background: var(--c-surface);
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
   border-radius: var(--r-xl);
   padding: 14px;
   margin: 0;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   font-size: 12px;
   line-height: 1.7;
   overflow: auto;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .scroll {
@@ -610,4 +969,9 @@ pre.term {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Aba sendo arrastada: some do lugar de origem sem sumir da barra. */
+.tab[data-arrastando="true"] {
+  opacity: 0.4;
 }

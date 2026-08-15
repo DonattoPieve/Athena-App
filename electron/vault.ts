@@ -11,16 +11,16 @@ import * as path from "node:path";
  *  - nenhum caminho pode escapar da raiz do vault
  */
 
-const WRITABLE_PREFIXES = [
-  "raw/subjects",
-  "raw/concepts",
-  "raw/games",
-  "raw/studies",
-  // Destino das imagens coladas na nota: e o primeiro lugar onde o passo 1 do
-  // CLAUDE.md procura ao encontrar `![[arquivo]]`. Colar em outra pasta
-  // significa imagem que o ingest nao acha.
-  "raw/attachments",
-];
+/**
+ * Escrita: `raw/` inteiro, MENOS `raw/INATEL/`.
+ *
+ * O `raw/` e seu — nota, rascunho, anexo, pasta nova que voce inventar. O
+ * INATEL e o material do professor: e a fonte que o ingest le, e uma edicao
+ * ali corrompe a origem sem deixar rastro. `wiki/` continua fora porque
+ * pagina gerada se corrige reprocessando, nao editando.
+ */
+const RAW = "raw";
+const SOMENTE_LEITURA = ["raw/INATEL"];
 
 const IGNORED = new Set([
   "node_modules",
@@ -37,6 +37,17 @@ export type TreeNode = {
   dir: boolean;
   children?: TreeNode[];
 };
+
+/** Retrato do vault para a home. Tudo lido do disco, nada do banco. */
+export type HomeData = {
+  subjects: { code: string; slug: string; nome: string; paginas: number; rel: string }[];
+  paginas: { slug: string; subject: string; titulo: string; rel: string; updated: string }[];
+  notas: number;
+  eventos: { data: string; texto: string; slug: string | null; removido: boolean }[];
+  /** Marcadores de conflito de merge no log.md — some do publish sem aviso. */
+  logConflitado: boolean;
+};
+
 
 export type SubjectRef = { code: string; name: string; folder: string };
 
@@ -92,9 +103,8 @@ export class Vault {
 
   isWritable(rel: string): boolean {
     const norm = rel.split(path.sep).join("/").replace(/^\/+/, "");
-    return WRITABLE_PREFIXES.some(
-      (p) => norm === p || norm.startsWith(p + "/"),
-    );
+    if (norm !== RAW && !norm.startsWith(RAW + "/")) return false;
+    return !SOMENTE_LEITURA.some((p) => norm === p || norm.startsWith(p + "/"));
   }
 
   async read(rel: string): Promise<string> {
@@ -106,8 +116,8 @@ export class Vault {
   async write(rel: string, content: string): Promise<void> {
     if (!this.isWritable(rel)) {
       throw new Error(
-        `Escrita bloqueada em "${rel}". O app so escreve em raw/subjects, ` +
-          `raw/concepts, raw/games e raw/studies. Paginas da wiki nascem do ingest.`,
+        `Escrita bloqueada em "${rel}". O app escreve em raw/, menos raw/INATEL/ ` +
+          `(material do professor). Pagina da wiki nasce do ingest.`,
       );
     }
     const abs = this.resolve(rel);
@@ -258,8 +268,8 @@ export class Vault {
   private assertWritable(rel: string, acao: string) {
     if (!this.isWritable(rel)) {
       throw new Error(
-        `${acao} bloqueado em "${rel}". O app so mexe em raw/subjects, raw/concepts, ` +
-          `raw/games, raw/studies e raw/attachments. raw/INATEL/ e wiki/ sao somente leitura.`,
+        `${acao} bloqueado em "${rel}". O app mexe em raw/, menos raw/INATEL/ ` +
+          `(material do professor). wiki/ e somente leitura.`,
       );
     }
   }
@@ -340,6 +350,101 @@ export class Vault {
       }
     }
     return out.sort((a, b) => a.slug.localeCompare(b.slug));
+  }
+
+  /**
+   * Retrato do vault para a home: materias, paginas, quantas notas e o
+   * historico do log.md. Le do DISCO, nao do banco — a home tem que dizer a
+   * verdade sobre esta maquina mesmo sem conta e sem internet.
+   */
+  async home(): Promise<HomeData> {
+    const subjects: HomeData["subjects"] = [];
+    const paginas: HomeData["paginas"] = [];
+
+    for (const materia of await this.listDir("wiki/subjects")) {
+      const dirRel = path.posix.join("wiki/subjects", materia);
+      const arquivos = (await this.listDir(dirRel)).filter((f) => f.endsWith(".md"));
+      let paginasDaMateria = 0;
+
+      for (const f of arquivos) {
+        const slug = f.slice(0, -3);
+        const rel = path.posix.join(dirRel, f);
+        // MOC e review nao contam como aula: um e indice, o outro e exercicio.
+        const ehMoc = slug === materia;
+        const ehReview = slug.endsWith("-review");
+        let updated = "";
+        let titulo = slug;
+        try {
+          const texto = await this.read(rel);
+          updated = /^updated:\s*'?([0-9-]{10})'?/m.exec(texto)?.[1] ?? "";
+          titulo = /^#\s+(.+)$/m.exec(texto)?.[1]?.trim() ?? slug;
+        } catch {
+          // arquivo ilegivel nao derruba a home
+        }
+        if (!ehMoc && !ehReview) {
+          paginasDaMateria++;
+          paginas.push({ slug, subject: materia, titulo, rel, updated });
+        }
+      }
+
+      subjects.push({
+        code: materia.split("-")[0],
+        slug: materia,
+        nome: materia.split("-").slice(1).join(" ") || materia,
+        paginas: paginasDaMateria,
+        rel: dirRel,
+      });
+    }
+
+    paginas.sort((a, b) => (b.updated || "").localeCompare(a.updated || ""));
+
+    let notas = 0;
+    for (const materia of await this.listDir("raw/subjects")) {
+      const arquivos = await this.listDir(path.posix.join("raw/subjects", materia));
+      notas += arquivos.filter((f) => f.endsWith(".md")).length;
+    }
+
+    // ---- log.md ----
+    const eventos: HomeData["eventos"] = [];
+    let logConflitado = false;
+    try {
+      const log = await this.read("log.md");
+      logConflitado = /^<<<<<<< |^>>>>>>> /m.test(log);
+      let data = "";
+      for (const linha of log.split("\n")) {
+        const cab = /^##\s+(\d{4}-\d{2}-\d{2})/.exec(linha);
+        if (cab) {
+          data = cab[1];
+          continue;
+        }
+        if (!linha.startsWith("- ") || !data) continue;
+        const removido = /^-\s+removido:/.test(linha);
+        const slug = /`([^`]+)`/.exec(linha)?.[1] ?? (removido ? linha.split(":")[1]?.trim() : null);
+        eventos.push({ data, texto: linha.slice(2).trim(), slug: slug ?? null, removido });
+      }
+    } catch {
+      // vault sem log.md ainda e caso normal
+    }
+
+    return { subjects, paginas, notas, eventos: eventos.slice(0, 40), logConflitado };
+  }
+
+  /**
+   * Caminho da pagina de um `[[wikilink]]`. Procura em wiki/subjects/*.
+   * Devolve null quando o link aponta para aula que nao existe — link orfao
+   * e caso comum e nao pode virar erro na tela.
+   */
+  async resolveLink(slug: string): Promise<string | null> {
+    const alvo = slug.trim().replace(/\.md$/i, "");
+    for (const materia of await this.listDir("wiki/subjects")) {
+      const dir = path.posix.join("wiki/subjects", materia);
+      for (const f of await this.listDir(dir)) {
+        if (f === `${alvo}.md`) return path.posix.join(dir, f);
+      }
+      // O link pode apontar para a materia (o MOC tem o nome da pasta).
+      if (materia === alvo) return path.posix.join(dir, `${materia}.md`);
+    }
+    return null;
   }
 
   /** Le o .ingest-status da RAIZ do vault (nunca relativo ao cwd). */

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Account, type IngestStatus } from "../lib/api";
+import { api, mensagemDeErro, type Account, type IngestStatus } from "../lib/api";
 
 /**
  * Publicar = Supabase + R2, nao git.
@@ -18,7 +18,8 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
   const [checking, setChecking] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [canForce, setCanForce] = useState(false);
+  /** Qual comando pediu --force na ultima saida, se algum. */
+  const [forcavel, setForcavel] = useState<"publish" | "pull" | null>(null);
   const [auto, setAuto] = useState(true);
   const [tools, setTools] = useState({ publish: true, pull: true });
 
@@ -53,10 +54,10 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
 
   async function run(name: "publish" | "pull", flags: string[] = []) {
     setResult(null);
-    setCanForce(false);
+    setForcavel(null);
     const r = await api.publish.run(name, flags);
-    setResult(r.output.trim() || (r.ok ? "Concluido." : "Falhou sem mensagem."));
-    setCanForce(r.canForce);
+    setResult(r.output.trim() || (r.ok ? "Concluído." : "Falhou sem mensagem."));
+    setForcavel(r.canForce ? name : null);
   }
 
   async function doLogin() {
@@ -67,7 +68,7 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
       setPassword("");
       setShowLogin(false);
     } catch (e) {
-      setLoginError((e as Error).message);
+      setLoginError(mensagemDeErro(e));
     }
   }
 
@@ -201,21 +202,15 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
         </button>
         <button
           className="btn"
-          disabled={busy || !tools.publish}
-          onClick={() => run("publish", ["--dry-run"])}
-          title="Mostra o que seria enviado, sem enviar nada"
-        >
-          Prévia
-        </button>
-        <button
-          className="btn"
           disabled={busy || !account || !tools.pull}
           onClick={() => run("pull")}
           title="Traz do banco e do R2 para este disco — rode ao sentar na outra máquina"
         >
           {running === "pull" ? "Puxando…" : "Puxar do banco"}
         </button>
-        {canForce && (
+
+        {/* Aparece só quando o próprio script pediu --force na saída. */}
+        {forcavel === "publish" && (
           <button
             className="btn btn-danger"
             disabled={busy}
@@ -223,6 +218,16 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
             title="O publish parou por desproporção. Só use se este disco realmente é a versão certa."
           >
             Publicar mesmo assim (--force)
+          </button>
+        )}
+        {forcavel === "pull" && (
+          <button
+            className="btn btn-danger"
+            disabled={busy}
+            onClick={() => run("pull", ["--force"])}
+            title="Deixa o disco idêntico ao banco: apaga o que existe só aqui. Nada vai para a lixeira."
+          >
+            Puxar mesmo assim (--force)
           </button>
         )}
       </div>

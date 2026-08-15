@@ -72,11 +72,12 @@ export function run(
 }
 
 /**
- * O publish para sozinho quando o disco tem menos da metade das paginas do
- * banco ("maquina desatualizada") e ensina a saida com --force. A UI le isto
- * para oferecer o botao — repetir a instrucao a mao sairia do ar no dia em
- * que o script mudar de ideia.
+ * Os dois scripts param sozinhos quando a diferenca entre disco e banco parece
+ * acidente — o publish por desproporcao, o pull por arquivo que so existe no
+ * disco — e ensinam a saida com --force. A UI le a propria mensagem do script
+ * para oferecer o botao: repetir a regra a mao sairia do ar no dia em que eles
+ * mudarem de ideia.
  */
-export function suggestsForce(output: string): boolean {
-  return /athena publish --force/.test(output);
+export function suggestsForce(name: ScriptName, output: string): boolean {
+  return new RegExp(`athena ${name} --force`).test(output);
 }

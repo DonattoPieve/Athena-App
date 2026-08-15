@@ -110,7 +110,11 @@ async function runScript(name: publish.ScriptName, flags: string[]) {
       send("publish:line", line);
     });
     send("vault:changed", null);
-    return { ok: res.code === 0, output: res.output, canForce: publish.suggestsForce(res.output) };
+    return {
+      ok: res.code === 0,
+      output: res.output,
+      canForce: publish.suggestsForce(name, res.output),
+    };
   } catch (e) {
     const msg = (e as Error).message;
     r?.log(msg, "error");
@@ -247,6 +251,14 @@ function registerIpc() {
   );
 
   ipcMain.handle("fs:lessons", () => requireVault().lessons());
+  ipcMain.handle("fs:home", () => requireVault().home());
+  ipcMain.handle("fs:resolveLink", (_e, slug: string) => requireVault().resolveLink(slug));
+  /** Link externo de uma nota abre no navegador do sistema, nunca na janela. */
+  ipcMain.handle("fs:openUrl", async (_e, url: string) => {
+    if (!/^https?:\/\//i.test(url)) throw new Error(`URL recusada: ${url}`);
+    await shell.openExternal(url);
+    return true;
+  });
 
   ipcMain.handle("clipboard:read", () => clipboard.readText());
   ipcMain.handle("clipboard:write", (_e, text: string) => {

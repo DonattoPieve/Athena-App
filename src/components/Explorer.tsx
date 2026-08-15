@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { api, type TreeNode } from "../lib/api";
+import { api, mensagemDeErro, type TreeNode } from "../lib/api";
 import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 import { useConfirm } from "./Confirm";
+import { Chevron, FileIcon, FolderIcon } from "./icons";
 
 const EDITAVEIS = /\.(md|txt)$/i;
 const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
@@ -51,7 +52,7 @@ export function Explorer({
       await fn();
       onChanged();
     } catch (e) {
-      setErro((e as Error).message);
+      setErro(mensagemDeErro(e));
     }
   }
 
@@ -246,7 +247,8 @@ function Row({
       <button
         className="nav-item"
         data-active={selected === node.rel}
-        style={{ paddingLeft: 10 + depth * 14 }}
+        data-dir={node.dir}
+        style={{ paddingLeft: 8 + depth * 14, gap: 6 }}
         onClick={() => {
           if (node.dir) setOpen((o) => !o);
           onSelect(node.rel);
@@ -264,9 +266,17 @@ function Row({
         }}
         title={readOnly ? `${node.rel} — somente leitura` : node.rel}
       >
-        <span style={{ opacity: 0.6, width: 10, display: "inline-block" }}>
-          {node.dir ? (open ? "v" : ">") : EDITAVEIS.test(node.name) ? "·" : "▪"}
-        </span>
+        {node.dir ? (
+          <>
+            <Chevron open={open} />
+            <FolderIcon open={open} />
+          </>
+        ) : (
+          <>
+            <span style={{ width: 10, flex: "0 0 auto" }} />
+            <FileIcon material={!EDITAVEIS.test(node.name)} />
+          </>
+        )}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {node.name}
         </span>

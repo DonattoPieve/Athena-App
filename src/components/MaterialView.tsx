@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { api } from "../lib/api";
+import { useEffect, useRef, useState } from "react";
+import { api, mensagemDeErro } from "../lib/api";
 
 /**
  * Visualizador do material oficial.
@@ -15,16 +15,36 @@ import { api } from "../lib/api";
  */
 export function MaterialView({ rel }: { rel: string }) {
   const [erro, setErro] = useState<string | null>(null);
+  const [aberto, setAberto] = useState(false);
   const nome = rel.split("/").pop() ?? rel;
   const ext = (nome.split(".").pop() ?? "").toLowerCase();
   const url = `athena://file/${rel.split("/").map(encodeURIComponent).join("/")}`;
+
+  /**
+   * PPT abre sozinho no PowerPoint ao abrir a aba. Uma tela dizendo "clique
+   * para abrir" e um clique a mais para chegar no mesmo lugar — o PDF ja abre
+   * direto, e o PPT tem que se comportar igual.
+   *
+   * O ref evita reabrir quando o React remonta (StrictMode, troca de aba):
+   * duas janelas do PowerPoint do mesmo arquivo e pior que nenhuma.
+   */
+  const jaAbriu = useRef<string | null>(null);
+  useEffect(() => {
+    if (ext === "pdf" || jaAbriu.current === rel) return;
+    jaAbriu.current = rel;
+    setErro(null);
+    api.fs
+      .openExternal(rel)
+      .then(() => setAberto(true))
+      .catch((e) => setErro(mensagemDeErro(e)));
+  }, [rel, ext]);
 
   async function abrirFora() {
     setErro(null);
     try {
       await api.fs.openExternal(rel);
     } catch (e) {
-      setErro((e as Error).message);
+      setErro(mensagemDeErro(e));
     }
   }
 
@@ -58,14 +78,14 @@ export function MaterialView({ rel }: { rel: string }) {
         >
           <div>
             <p style={{ margin: "0 0 6px", fontWeight: 500 }}>
-              {ext === "pptx" || ext === "ppt" ? "Apresentação do professor" : `Arquivo .${ext}`}
+              {aberto ? "Aberto no programa padrão" : `Abrindo ${nome}…`}
             </p>
             <p style={{ margin: "0 0 16px", color: "var(--c-muted)", fontSize: 12, maxWidth: 420 }}>
-              O leitor embutido só renderiza PDF. Este arquivo abre no programa padrão do Windows,
-              que mostra fonte, layout e animação como o professor montou.
+              O leitor embutido só renderiza PDF, então este arquivo foi para o programa padrão do
+              Windows — que mostra fonte, layout e animação como o professor montou.
             </p>
-            <button className="btn btn-primary" onClick={abrirFora}>
-              Abrir {nome}
+            <button className="btn" onClick={abrirFora}>
+              Abrir de novo
             </button>
           </div>
         </div>

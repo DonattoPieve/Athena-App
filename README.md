@@ -130,10 +130,11 @@ continuam num lugar só, valendo pelo terminal e por aqui.
 
 - **Publicar** — `athena publish`. Bloqueado sem `OK` no `.ingest-status` e sem
   conta.
-- **Prévia** — `--dry-run`: mostra o que subiria, sem subir.
 - **Puxar do banco** — `athena pull`, para a segunda máquina.
-- **`--force`** só aparece quando o próprio script pede, ao parar por
-  desproporção.
+- **`--force`** só aparece quando o próprio script pede, na saída: o publish
+  quando para por desproporção, o pull quando encontra arquivo que só existe no
+  disco. O botão é do comando que pediu — forçar publish e forçar pull apagam
+  lados opostos.
 - **publicar ao terminar** (ligado por padrão) reproduz o `.bat`: terminou com
   `OK`, vai pro ar. `delete` publica com `--force`, porque remover páginas é
   exatamente a desproporção que a guarda barra — e nesse caso foi pedida.
@@ -164,9 +165,21 @@ credenciais do `athena-web/.env.local`. Entrar aqui é entrar lá. Em disco fica
 o refresh token; a `SERVICE_ROLE` continua sem existir no projeto, então o app
 escreve como usuário normal e apanha do RLS igual a todo mundo.
 
+### Navegação
+
+Três lugares: **Comandos**, **Nova nota** e **Arquivo**. A árvore é quem manda —
+clicar num arquivo abre ele em *Arquivo*, e a própria tela decide o modo: nota
+em `raw/` abre **editável** (salva no mesmo arquivo), página da wiki abre em
+leitura, PDF e PPT abrem no visualizador.
+
+> Antes existiam abas "Leitura" e "Material" separadas e a árvore trocava de aba
+> sozinha: escolher "Leitura" com um PDF selecionado dava uma tela pedindo um
+> `.md` que você não conseguia escolher sem sair dali.
+
 ### Explorer (botão direito)
 
-Menu de contexto desenhado pelo app — como VS Code e Obsidian fazem — porque os
+Ícones de pasta e arquivo em SVG inline (herdam `currentColor`, então seguem
+tema e paleta). Menu de contexto desenhado pelo app — como VS Code e Obsidian fazem — porque os
 itens dependem do estado do vault e do tema: nova nota, nova pasta, renomear
 (`F2`, com o nome pré-selecionado sem a extensão), copiar caminho, revelar no
 Explorer do Windows, abrir material no programa padrão e apagar.
@@ -241,6 +254,14 @@ página é `interrupcoes-externas` não aponta para lugar nenhum.
 
 **Botão direito no texto**: recortar/copiar/colar, negrito, itálico, código,
 link para aula e tabela.
+
+**Bloco de código** mostra a linguagem no canto (`data-lang`) e é colorido pelo
+lowlight com a paleta VS Code Dark+ — as mesmas regras `.hljs-*` do
+`athena-web/src/app/globals.css`, copiadas para o app não depender do build do
+site. Mexeu num, mexa no outro.
+
+O mesmo `MarkdownEditor` serve nota nova e nota existente: o que muda é onde o
+markdown é gravado, não como é escrito.
 
 Ainda fora: nota de rodapé e HTML embutido. Para esses, use o modo `markdown` —
 o texto passa intacto.

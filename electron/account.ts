@@ -123,15 +123,41 @@ export async function status(vaultRoot: string): Promise<Account | null> {
   };
 }
 
+/**
+ * O Supabase responde em ingles e em linguagem de API. Quem le e voce, no meio
+ * de uma tentativa de login — a mensagem precisa dizer o que fazer a seguir.
+ */
+function emPortugues(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login credentials")) {
+    return "E-mail ou senha inválida, por favor tente novamente.";
+  }
+  if (m.includes("email not confirmed")) {
+    return "Esta conta ainda não confirmou o e-mail. Procure a mensagem de confirmação do Supabase.";
+  }
+  if (m.includes("too many requests") || m.includes("rate limit")) {
+    return "Tentativas demais em pouco tempo. Espere um minuto e tente de novo.";
+  }
+  if (m.includes("fetch failed") || m.includes("network") || m.includes("enotfound")) {
+    return "Não consegui falar com o Supabase. Verifique sua conexão e tente de novo.";
+  }
+  return msg;
+}
+
 export async function login(
   vaultRoot: string,
   email: string,
   password: string,
 ): Promise<Account> {
   const supabase = makeClient(vaultRoot);
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error || !data.session || !data.user) {
-    throw new Error(error?.message ?? "Nao consegui entrar.");
+  const { data, error } = await supabase.auth
+    .signInWithPassword({ email, password })
+    // Falha de rede vira excecao, nao `error` — sem isto o usuario recebe
+    // "fetch failed" cru vindo do undici.
+    .catch((e: Error) => ({ data: null, error: e as unknown as { message: string } }));
+
+  if (error || !data?.session || !data?.user) {
+    throw new Error(emPortugues(error?.message ?? "Não consegui entrar."));
   }
   saveSession(vaultRoot, data.session.refresh_token);
   return {

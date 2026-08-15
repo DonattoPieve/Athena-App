@@ -35,6 +35,9 @@ const api = {
     pasteImage: (base: string, ext: string, data: Uint8Array) =>
       ipcRenderer.invoke("fs:pasteImage", base, ext, data),
     lessons: () => ipcRenderer.invoke("fs:lessons"),
+    home: () => ipcRenderer.invoke("fs:home"),
+    resolveLink: (slug: string) => ipcRenderer.invoke("fs:resolveLink", slug),
+    openUrl: (url: string) => ipcRenderer.invoke("fs:openUrl", url),
   },
   clipboard: {
     read: () => ipcRenderer.invoke("clipboard:read"),

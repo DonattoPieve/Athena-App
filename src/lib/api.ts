@@ -48,6 +48,15 @@ export type Snapshot = {
 
 export type IngestStatus = "OK" | "FAIL" | "NONE";
 
+/** Retrato do vault para a home — vem do disco, nao do banco. */
+export type HomeData = {
+  subjects: { code: string; slug: string; nome: string; paginas: number; rel: string }[];
+  paginas: { slug: string; subject: string; titulo: string; rel: string; updated: string }[];
+  notas: number;
+  eventos: { data: string; texto: string; slug: string | null; removido: boolean }[];
+  logConflitado: boolean;
+};
+
 export type Account = { name: string; email: string };
 
 /** Resultado de `athena publish` / `athena pull` rodados pelo app. */
@@ -75,6 +84,9 @@ type AthenaBridge = {
     openExternal(rel: string): Promise<boolean>;
     pasteImage(base: string, ext: string, data: Uint8Array): Promise<string>;
     lessons(): Promise<{ slug: string; subject: string }[]>;
+    home(): Promise<HomeData>;
+    resolveLink(slug: string): Promise<string | null>;
+    openUrl(url: string): Promise<boolean>;
   };
   clipboard: { read(): Promise<string>; write(text: string): Promise<boolean> };
   status: {
@@ -110,6 +122,21 @@ declare global {
 }
 
 export const api = window.athena;
+
+/**
+ * Mensagem de erro pronta para a tela.
+ *
+ * O Electron embrulha tudo que vem do main em
+ * `Error invoking remote method 'account:login': Error: ...`. O nome do canal
+ * IPC nao ajuda ninguem — o que importa e a frase depois dele.
+ */
+export function mensagemDeErro(e: unknown): string {
+  const bruto = e instanceof Error ? e.message : String(e);
+  return bruto
+    .replace(/^Error invoking remote method '[^']*':\s*/, "")
+    .replace(/^(Error|TypeError):\s*/, "")
+    .trim();
+}
 
 /** Deduz materia e aula a partir de um caminho da arvore. */
 export function parseSelection(rel: string): { code: string; lesson: string | null } | null {

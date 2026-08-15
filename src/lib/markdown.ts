@@ -1,10 +1,33 @@
-import type { Editor } from "@tiptap/react";
+import { mergeAttributes, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { TableKit } from "@tiptap/extension-table";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import Image from "@tiptap/extension-image";
+import { CodeBlockLowlight } from "@tiptap/extension-code-block-lowlight";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "tiptap-markdown";
+import { common, createLowlight } from "lowlight";
+
+const lowlight = createLowlight(common);
+
+/**
+ * Bloco de codigo colorido, com a linguagem visivel.
+ *
+ * O `data-lang` no <pre> e o que permite o CSS escrever a etiqueta ("c",
+ * "python") no canto do bloco — sem ele, so o autor da nota sabe em que
+ * linguagem aquilo esta. As cores sao as mesmas do athena-web (VS Code
+ * Dark+), aplicadas pelas classes .hljs-* que o lowlight gera.
+ */
+const CodeBlock = CodeBlockLowlight.extend({
+  renderHTML({ node, HTMLAttributes }) {
+    const lang = node.attrs.language as string | null;
+    return [
+      "pre",
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, lang ? { "data-lang": lang } : {}),
+      ["code", { class: lang ? `language-${lang}` : null }, 0],
+    ];
+  },
+}).configure({ lowlight });
 
 /**
  * MARKDOWN E A FONTE DA VERDADE
@@ -20,7 +43,15 @@ import { Markdown } from "tiptap-markdown";
  */
 export function athenaExtensions(placeholder: string) {
   return [
-    StarterKit,
+    // codeBlock desligado no kit: o nosso e o mesmo no ("codeBlock"), com
+    // realce e etiqueta de linguagem. Dois registrando o mesmo nome quebra.
+    StarterKit.configure({
+      codeBlock: false,
+      // Sem declarar o protocolo, o sanitizador do Link joga fora o href do
+      // wikilink e ele vira texto sem clique.
+      link: { protocols: ["athena-wiki"] },
+    }),
+    CodeBlock,
     // Tabela de bits e o formato nativo das notas de E09 — obrigatorio.
     TableKit.configure({ table: { resizable: false } }),
     TaskList,
@@ -98,6 +129,23 @@ export function siteAssetsParaSrc(md: string): string {
 /** Markdown do disco pronto para o editor. */
 export function toEditor(md: string): string {
   return siteAssetsParaSrc(embedsParaSrc(md));
+}
+
+/**
+ * `[[aula|Titulo]]` vira link clicavel — SO NA LEITURA.
+ *
+ * No editor isto nao pode acontecer: o wikilink e texto que precisa voltar
+ * igual para o disco, e virar link o transformaria em `[Titulo](...)` no
+ * salvamento. Por isso a conversao mora aqui e nao em toEditor().
+ *
+ * O `!` na frente e embed de imagem e ja foi tratado antes — dai o lookbehind.
+ */
+export function toLeitura(md: string): string {
+  return toEditor(md).replace(
+    /(?<!!)\[\[([^\]|]+?)(?:\|([^\]]+?))?\]\]/g,
+    (_m, alvo: string, titulo?: string) =>
+      `[${(titulo ?? alvo).trim()}](athena-wiki:${encodeURIComponent(alvo.trim())})`,
+  );
 }
 
 /** Separa o frontmatter YAML do corpo — o editor renderiza so o corpo. */
