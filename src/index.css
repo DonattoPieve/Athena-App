@@ -1,0 +1,236 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Tokens do DESIGN.md. Componente novo usa SEMPRE var(--c-*),
+   nunca hex fixo — e o que mantem as 7 paletas e os 2 modos vivos.
+   ------------------------------------------------------------------ */
+
+:root {
+  --c-bg: #fbfafd;
+  --c-surface: #f3eff8;
+  --c-card: #ffffff;
+  --c-border: #e4dcef;
+  --c-text: #1a1423;
+  --c-muted: #6e6580;
+  --c-accent: #5a189a;
+  --c-accent-light: #f0e6fa;
+  --c-code-bg: #240046;
+  --c-code-text: #e0aaff;
+
+  --sv-accent: #5a189a;
+  --sv-bright: #b15cff;
+  --sv-mid: #7b2cbf;
+  --sv-deep: #3c096c;
+  --sv-glow: #e0aaff;
+
+  --dots: rgba(90, 24, 154, 0.09);
+  --shadow-card: 0 1px 2px rgba(36, 0, 70, 0.05), 0 4px 16px rgba(36, 0, 70, 0.07);
+  --shadow-card-hover: 0 2px 4px rgba(36, 0, 70, 0.08), 0 12px 28px rgba(36, 0, 70, 0.16);
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 12px;
+  --r-2xl: 16px;
+}
+
+[data-theme="dark"] {
+  --c-bg: #0a0a0c;
+  --c-surface: #16161a;
+  --c-card: #101013;
+  --c-border: #27272e;
+  --c-text: #f5f5f7;
+  --c-muted: #8c8c96;
+  --c-accent: #b15cff;
+  --c-accent-light: rgba(177, 92, 255, 0.14);
+  --dots: rgba(177, 92, 255, 0.1);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.55);
+}
+
+/* Paletas trocaveis — so o acento muda, a estrutura permanece. */
+[data-palette="cyan"] { --c-accent: #0e7490; --sv-accent: #0e7490; --sv-bright: #22d3ee; --sv-glow: #a5f3fc; --c-accent-light: #dff7fb; --dots: rgba(14,116,144,.09); }
+[data-theme="dark"][data-palette="cyan"] { --c-accent: #22d3ee; --c-accent-light: rgba(34,211,238,.14); --dots: rgba(34,211,238,.1); }
+
+[data-palette="blue"] { --c-accent: #1d4ed8; --sv-accent: #1d4ed8; --sv-bright: #60a5fa; --sv-glow: #bfdbfe; --c-accent-light: #e4ecfd; --dots: rgba(29,78,216,.09); }
+[data-theme="dark"][data-palette="blue"] { --c-accent: #60a5fa; --c-accent-light: rgba(96,165,250,.14); --dots: rgba(96,165,250,.1); }
+
+[data-palette="matrix"] { --c-accent: #15803d; --sv-accent: #15803d; --sv-bright: #4ade80; --sv-glow: #bbf7d0; --c-accent-light: #e1f6e7; --dots: rgba(21,128,61,.09); }
+[data-theme="dark"][data-palette="matrix"] { --c-accent: #4ade80; --c-accent-light: rgba(74,222,128,.14); --dots: rgba(74,222,128,.1); }
+
+[data-palette="amber"] { --c-accent: #b45309; --sv-accent: #b45309; --sv-bright: #fbbf24; --sv-glow: #fde68a; --c-accent-light: #fbeedd; --dots: rgba(180,83,9,.09); }
+[data-theme="dark"][data-palette="amber"] { --c-accent: #fbbf24; --c-accent-light: rgba(251,191,36,.14); --dots: rgba(251,191,36,.1); }
+
+[data-palette="pink"] { --c-accent: #be185d; --sv-accent: #be185d; --sv-bright: #f472b6; --sv-glow: #fbcfe8; --c-accent-light: #fce7f1; --dots: rgba(190,24,93,.09); }
+[data-theme="dark"][data-palette="pink"] { --c-accent: #f472b6; --c-accent-light: rgba(244,114,182,.14); --dots: rgba(244,114,182,.1); }
+
+[data-palette="red"] { --c-accent: #b91c1c; --sv-accent: #b91c1c; --sv-bright: #f87171; --sv-glow: #fecaca; --c-accent-light: #fbe6e6; --dots: rgba(185,28,28,.09); }
+[data-theme="dark"][data-palette="red"] { --c-accent: #f87171; --c-accent-light: rgba(248,113,113,.14); --dots: rgba(248,113,113,.1); }
+
+@theme inline {
+  --color-bg: var(--c-bg);
+  --color-surface: var(--c-surface);
+  --color-card: var(--c-card);
+  --color-line: var(--c-border);
+  --color-ink: var(--c-text);
+  --color-muted: var(--c-muted);
+  --color-accent: var(--c-accent);
+  --color-accent-light: var(--c-accent-light);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-prose: Arial, Helvetica, sans-serif;
+}
+
+/* Fonte unica na UI: JetBrains Mono em toda a chrome (DESIGN.md §3). */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background-color: var(--c-bg);
+  background-image: radial-gradient(var(--dots) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--c-text);
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* Prosa: unica troca de fonte do sistema — sinaliza "conteudo, nao interface". */
+.prose-body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 1rem;
+  line-height: 1.8;
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+.card {
+  background: var(--c-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-border);
+  background: var(--c-card);
+  color: var(--c-text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 160ms, border-color 160ms, background-color 160ms;
+}
+.btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--c-accent) 50%, transparent);
+  color: var(--c-accent);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-bg);
+  font-weight: 500;
+}
+.btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-accent) 85%, black);
+  color: var(--c-bg);
+}
+.btn-danger:hover:not(:disabled) {
+  border-color: #e24b4a;
+  color: #e24b4a;
+}
+
+/* Segmento selecionado (raw · wiki). Sem isto os dois botoes ficam iguais e
+   nao da para saber qual arvore esta na tela. */
+.btn[data-active="true"] {
+  background: var(--c-accent-light);
+  border-color: color-mix(in srgb, var(--c-accent) 45%, transparent);
+  color: var(--c-accent);
+  font-weight: 500;
+}
+
+.field {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-border);
+  background: var(--c-card);
+  color: var(--c-text);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+}
+.field:focus {
+  border-color: color-mix(in srgb, var(--c-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 10%, transparent);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px;
+  border-radius: var(--r-md);
+  color: var(--c-muted);
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.nav-item:hover {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.nav-item[data-active="true"] {
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  font-weight: 500;
+}
+
+pre.term {
+  background: var(--c-code-bg);
+  color: var(--c-code-text);
+  border-radius: var(--r-xl);
+  padding: 14px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-border) transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
