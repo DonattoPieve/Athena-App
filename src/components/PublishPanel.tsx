@@ -21,6 +21,7 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
   /** Qual comando pediu --force na ultima saida, se algum. */
   const [forcavel, setForcavel] = useState<"publish" | "pull" | null>(null);
   const [auto, setAuto] = useState(true);
+  const [autoPull, setAutoPull] = useState(true);
   const [tools, setTools] = useState({ publish: true, pull: true });
 
   // login
@@ -33,6 +34,7 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
     api.status.get().then(setStatus);
     api.publish.available().then(setTools).catch(() => {});
     api.publish.autoPublish().then(setAuto).catch(() => {});
+    api.publish.autoPull().then(setAutoPull).catch(() => {});
   }, [refreshKey]);
 
   useEffect(() => api.status.onChange(setStatus), []);
@@ -92,28 +94,36 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
               : "nenhum comando executado nesta máquina"}
         </span>
 
-        <label
-          style={{
-            marginLeft: "auto",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 11,
-            color: "var(--c-muted)",
-            cursor: "pointer",
-          }}
-          title="Igual ao passo [2/2] do athena.bat: terminou com OK, vai pro banco"
-        >
-          <input
-            type="checkbox"
-            checked={auto}
-            onChange={(e) => {
-              setAuto(e.target.checked);
-              api.publish.autoPublish(e.target.checked);
-            }}
-          />
-          publicar ao terminar
-        </label>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 14 }}>
+          <label
+            className="opcao"
+            title="Puxa do banco uma vez na abertura do app. Sem --force: nunca sobrescreve nem apaga."
+          >
+            <input
+              type="checkbox"
+              checked={autoPull}
+              onChange={(e) => {
+                setAutoPull(e.target.checked);
+                api.publish.autoPull(e.target.checked);
+              }}
+            />
+            puxar ao abrir
+          </label>
+          <label
+            className="opcao"
+            title="Igual ao passo [2/2] do athena.bat: terminou com OK, vai pro banco"
+          >
+            <input
+              type="checkbox"
+              checked={auto}
+              onChange={(e) => {
+                setAuto(e.target.checked);
+                api.publish.autoPublish(e.target.checked);
+              }}
+            />
+            publicar ao terminar
+          </label>
+        </div>
       </div>
 
       {/* ---- conta ---- */}

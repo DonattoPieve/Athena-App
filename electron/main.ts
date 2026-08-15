@@ -17,12 +17,15 @@ import { Vault, slugify } from "./vault";
 import { ClaudeRunner, Cmd, SessionEvent } from "./claude";
 import * as account from "./account";
 import * as publish from "./publish";
+import { Terminal, TermEvent } from "./terminal";
 
 type Config = {
   vaultPath?: string;
   claudeBin?: string;
   /** Publicar sozinho quando o comando termina com OK — igual ao athena.bat. */
   autoPublish?: boolean;
+  /** Puxar do banco uma vez na abertura do app. */
+  autoPull?: boolean;
 };
 
 const CONFIG_FILE = () => path.join(app.getPath("userData"), "athena-app.json");
@@ -45,6 +48,7 @@ let vault: Vault | null = null;
 let runner: ClaudeRunner | null = null;
 let watcher: FSWatcher | null = null;
 let statusWatcher: FSWatcher | null = null;
+let term: Terminal | null = null;
 
 function send(channel: string, payload: unknown) {
   win?.webContents.send(channel, payload);
@@ -72,6 +76,11 @@ function attachVault(root: string) {
       void afterJob(e.state, e.cmd);
     }
   });
+
+  // Terminal segue o vault: o cwd tem que ser a raiz, e nao onde o app abriu.
+  term?.removeAllListeners();
+  term = new Terminal(root);
+  term.on("event", (e: TermEvent) => send("term:event", e));
 
   watcher?.close();
   // OneDrive dispara eventos fantasma; o debounce do awaitWriteFinish
@@ -155,6 +164,35 @@ async function afterJob(state: "done" | "failed", cmd?: Cmd) {
   );
 }
 
+/**
+ * Puxa do banco UMA VEZ, na abertura.
+ *
+ * Com o conteudo fora do git, as duas copias sao este disco e o banco — e a
+ * segunda maquina comeca desatualizada. Puxar na abertura e o que evita
+ * publicar por cima do trabalho feito na outra maquina.
+ *
+ * Na abertura, e nao a cada login, de proposito: `pull` mexe em arquivo, e
+ * fazer isso com uma nota aberta e editada trocaria o chao debaixo do editor.
+ * Aqui ainda nao ha nada aberto.
+ *
+ * Sem --force, o pull nunca sobrescreve nem apaga: so cria o que falta e
+ * avisa o que diverge. E por isso que da para rodar sozinho.
+ */
+let jaPuxou = false;
+async function pullInicial() {
+  if (jaPuxou || !vault) return;
+  jaPuxou = true;
+
+  if (readConfig().autoPull === false) return;
+  if (runner?.busy) return; // nunca mexer em arquivo no meio de um ingest
+  if (!account.hasSession(vault.root)) return; // sem conta nao ha o que puxar
+  if (!publish.scriptExists(vault.root, "pull")) return;
+
+  runner?.log("Puxando do banco (abertura do app)...");
+  const res = await runScript("pull", []);
+  if (!res.ok) runner?.log("O pull da abertura falhou — o disco esta intacto.", "error");
+}
+
 function requireVault(): Vault {
   if (!vault) throw new Error("Nenhum vault selecionado.");
   return vault;
@@ -171,6 +209,9 @@ function registerIpc() {
     if (cfg.vaultPath && !vault && Vault.isVault(cfg.vaultPath)) {
       attachVault(cfg.vaultPath);
     }
+    // Nao bloqueia a abertura da janela: a arvore aparece e o pull acontece
+    // atras, com a saida no painel da sessao.
+    if (vault) void pullInicial();
     return { path: vault?.root ?? null, claudeBin: cfg.claudeBin ?? "claude" };
   });
 
@@ -285,6 +326,14 @@ function registerIpc() {
   ipcMain.handle("account:login", (_e, email: string, password: string) =>
     account.login(requireVault().root, email, password),
   );
+  ipcMain.handle("account:signUp", (_e, email: string, senha: string, nome: string) =>
+    account.signUp(requireVault().root, email, senha, nome),
+  );
+  ipcMain.handle(
+    "account:update",
+    (_e, campos: { email?: string; password?: string; nome?: string }) =>
+      account.updateAccount(requireVault().root, campos),
+  );
   ipcMain.handle("account:logout", () => {
     account.logout(requireVault().root);
     return true;
@@ -302,6 +351,22 @@ function registerIpc() {
     if (typeof on === "boolean") writeConfig({ ...readConfig(), autoPublish: on });
     return readConfig().autoPublish !== false;
   });
+  ipcMain.handle("config:autoPull", (_e, on?: boolean) => {
+    if (typeof on === "boolean") writeConfig({ ...readConfig(), autoPull: on });
+    return readConfig().autoPull !== false;
+  });
+
+  // ---- terminal ----
+  ipcMain.handle("term:run", (_e, comando: string) => {
+    if (!term) throw new Error("Nenhum vault selecionado.");
+    term.run(comando);
+    return true;
+  });
+  ipcMain.handle("term:cancel", () => {
+    term?.cancel();
+    return true;
+  });
+  ipcMain.handle("term:cwd", () => vault?.root ?? "");
 
   /**
    * Abre um terminal ja no `claude`. O login do Claude Code e interativo e

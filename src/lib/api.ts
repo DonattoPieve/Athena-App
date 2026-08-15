@@ -59,6 +59,12 @@ export type HomeData = {
 
 export type Account = { name: string; email: string };
 
+/** Saida do terminal do app. */
+export type TermEvent =
+  | { kind: "out"; text: string }
+  | { kind: "err"; text: string }
+  | { kind: "exit"; code: number };
+
 /** Resultado de `athena publish` / `athena pull` rodados pelo app. */
 export type ScriptResult = { ok: boolean; output: string; canForce: boolean };
 
@@ -100,15 +106,26 @@ type AthenaBridge = {
     snapshot(): Promise<Snapshot>;
     onEvent(cb: (e: SessionEvent) => void): () => void;
   };
+  term: {
+    run(comando: string): Promise<boolean>;
+    cancel(): Promise<boolean>;
+    cwd(): Promise<string>;
+    onEvent(cb: (e: TermEvent) => void): () => void;
+  };
   account: {
     status(): Promise<Account | null>;
     login(email: string, password: string): Promise<Account>;
     logout(): Promise<boolean>;
+    signUp(email: string, senha: string, nome: string): Promise<Account | null>;
+    update(campos: { email?: string; password?: string; nome?: string }): Promise<{
+      pendente: boolean;
+    }>;
   };
   publish: {
     run(name: "publish" | "pull", flags?: string[]): Promise<ScriptResult>;
     available(): Promise<{ publish: boolean; pull: boolean }>;
     autoPublish(on?: boolean): Promise<boolean>;
+    autoPull(on?: boolean): Promise<boolean>;
     onLine(cb: (line: string) => void): () => void;
     onState(cb: (s: { running: boolean; name: string }) => void): () => void;
   };

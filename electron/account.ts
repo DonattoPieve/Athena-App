@@ -37,6 +37,36 @@ if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
 
 export type Account = { name: string; email: string };
 
+/**
+ * O Supabase responde em ingles e em linguagem de API. Quem le e voce, no meio
+ * de uma tentativa de login — a mensagem precisa dizer o que fazer a seguir.
+ */
+function emPortugues(msg: string): string {
+  const m = msg.toLowerCase();
+  if (m.includes("invalid login credentials")) {
+    return "E-mail ou senha inválida, por favor tente novamente.";
+  }
+  if (m.includes("email not confirmed")) {
+    return "Esta conta ainda não confirmou o e-mail. Procure a mensagem de confirmação do Supabase.";
+  }
+  if (m.includes("too many requests") || m.includes("rate limit")) {
+    return "Tentativas demais em pouco tempo. Espere um minuto e tente de novo.";
+  }
+  if (m.includes("fetch failed") || m.includes("network") || m.includes("enotfound")) {
+    return "Não consegui falar com o Supabase. Verifique sua conexão e tente de novo.";
+  }
+  return msg;
+}
+
+/**
+ * Criar conta. O trigger `on_auth_user_created` do schema cria a linha em
+ * `profiles` sozinho — o app nao escreve nessa tabela.
+ *
+ * Se o projeto exigir confirmacao de e-mail, o Supabase devolve usuario sem
+ * sessao: nesse caso avisamos em vez de fingir que entrou.
+ */
+
+
 const SESSION_REL = path.join(".athena", "session.json");
 const ENV_REL = path.join("athena-web", ".env.local");
 
@@ -123,25 +153,56 @@ export async function status(vaultRoot: string): Promise<Account | null> {
   };
 }
 
+export async function signUp(
+  vaultRoot: string,
+  email: string,
+  password: string,
+  nome: string,
+): Promise<Account | null> {
+  const supabase = makeClient(vaultRoot);
+  const { data, error } = await supabase.auth
+    .signUp({ email, password, options: { data: { name: nome } } })
+    .catch((e: Error) => ({ data: null, error: e as unknown as { message: string } }));
+
+  if (error) throw new Error(emPortugues(error.message));
+  if (!data?.session) return null; // precisa confirmar o e-mail
+  saveSession(vaultRoot, data.session.refresh_token);
+  return {
+    name: (data.user?.user_metadata?.name as string) ?? data.user?.email ?? "",
+    email: data.user?.email ?? "",
+  };
+}
+
 /**
- * O Supabase responde em ingles e em linguagem de API. Quem le e voce, no meio
- * de uma tentativa de login — a mensagem precisa dizer o que fazer a seguir.
+ * Troca de e-mail e de senha usam a sessao atual. O Supabase costuma exigir
+ * confirmacao no e-mail NOVO antes de valer — por isso o retorno diz se ja
+ * valeu ou se ha um e-mail esperando confirmacao.
  */
-function emPortugues(msg: string): string {
-  const m = msg.toLowerCase();
-  if (m.includes("invalid login credentials")) {
-    return "E-mail ou senha inválida, por favor tente novamente.";
+export async function updateAccount(
+  vaultRoot: string,
+  campos: { email?: string; password?: string; nome?: string },
+): Promise<{ pendente: boolean }> {
+  const file = sessionFile(vaultRoot);
+  if (!fs.existsSync(file)) throw new Error("Sem sessao nesta maquina.");
+  const { refresh_token } = JSON.parse(fs.readFileSync(file, "utf8"));
+
+  const supabase = makeClient(vaultRoot);
+  const sessao = await supabase.auth.refreshSession({ refresh_token });
+  if (sessao.error || !sessao.data.session) {
+    throw new Error("Sessao expirada. Entre de novo.");
   }
-  if (m.includes("email not confirmed")) {
-    return "Esta conta ainda não confirmou o e-mail. Procure a mensagem de confirmação do Supabase.";
-  }
-  if (m.includes("too many requests") || m.includes("rate limit")) {
-    return "Tentativas demais em pouco tempo. Espere um minuto e tente de novo.";
-  }
-  if (m.includes("fetch failed") || m.includes("network") || m.includes("enotfound")) {
-    return "Não consegui falar com o Supabase. Verifique sua conexão e tente de novo.";
-  }
-  return msg;
+  saveSession(vaultRoot, sessao.data.session.refresh_token);
+
+  const { data, error } = await supabase.auth.updateUser({
+    ...(campos.email ? { email: campos.email } : {}),
+    ...(campos.password ? { password: campos.password } : {}),
+    ...(campos.nome ? { data: { name: campos.nome } } : {}),
+  });
+  if (error) throw new Error(emPortugues(error.message));
+
+  // e-mail novo so vale depois da confirmacao; ate la o antigo continua.
+  const pendente = !!campos.email && data.user?.email !== campos.email;
+  return { pendente };
 }
 
 export async function login(

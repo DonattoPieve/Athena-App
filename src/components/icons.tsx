@@ -31,7 +31,7 @@ export function FolderIcon({ open }: { open: boolean }) {
   );
 }
 
-/** Arquivo comum; `material` marca PDF/PPT com preenchimento. */
+/** Arquivo comum; `dobrado` marca o canto de folha para .md e afins. */
 /**
  * Icones da barra de atividade (o rail estreito). Traco de 1.6 em grade de 24
  * para ficarem legiveis a 18px, que e o tamanho que cabe la.
@@ -67,11 +67,40 @@ export const IconBusca = () => (
   </Rail>
 );
 
-export const IconComandos = () => (
+/** Terminal de verdade: janela com prompt. */
+export const IconTerminal = () => (
   <Rail>
     <rect x="3" y="4" width="18" height="16" rx="2" />
     <path d="m7 9 3 3-3 3" />
     <path d="M13 15h4" />
+  </Rail>
+);
+
+/** Comandos do Athena (ingest, redo, review, delete): raio, nao terminal. */
+export const IconComandos = () => (
+  <Rail>
+    <path d="M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12z" />
+  </Rail>
+);
+
+export const IconMais = () => (
+  <Rail>
+    <path d="M12 5v14" />
+    <path d="M5 12h14" />
+  </Rail>
+);
+
+export const IconConfig = () => (
+  <Rail>
+    <circle cx="12" cy="12" r="3.2" />
+    <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 9 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.6 9a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z" />
+  </Rail>
+);
+
+export const IconPerfil = () => (
+  <Rail>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
   </Rail>
 );
 

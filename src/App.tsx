@@ -9,14 +9,21 @@ import { NoteEditor } from "./components/NoteEditor";
 import { FileEditor } from "./components/FileEditor";
 import { MarkdownView } from "./components/MarkdownView";
 import { MaterialView } from "./components/MaterialView";
-import { ThemeControl } from "./components/ThemeControl";
+import { Login } from "./components/Login";
+import { TerminalPanel } from "./components/TerminalPanel";
+import { Settings } from "./components/Settings";
+import { Profile } from "./components/Profile";
 import {
   IconArquivos,
   IconBusca,
   IconComandos,
+  IconConfig,
   IconLado,
-  IconPublicar,
+  IconMais,
+  IconPerfil,
+  IconTerminal,
 } from "./components/icons";
+import type { Account } from "./lib/api";
 
 type Scope = "raw" | "wiki";
 
@@ -28,8 +35,9 @@ const EDITAVEL = (rel: string) => rel.startsWith("raw/") && !rel.startsWith("raw
 /**
  * ABAS
  * ----
- * Tudo que se abre e uma aba, como num editor de codigo. "Home" e fixa (nao
- * fecha); as outras nascem do clique na arvore e morrem no X.
+ * Tudo que se abre e uma aba, como num editor de codigo. "Comandos" e fixa
+ * (nao fecha) porque e de onde os comandos saem; as outras nascem do clique
+ * na arvore e morrem no X.
  *
  * Antes existia um item "Arquivo" na navegacao mostrando o selecionado: so
  * cabia um por vez, e clicar na arvore trocava o que voce estava lendo.
@@ -37,11 +45,26 @@ const EDITAVEL = (rel: string) => rel.startsWith("raw/") && !rel.startsWith("raw
 type Aba =
   | { id: "home"; tipo: "home" }
   | { id: "comandos"; tipo: "comandos" }
+  | { id: "terminal"; tipo: "terminal" }
+  | { id: "config"; tipo: "config" }
+  | { id: "perfil"; tipo: "perfil" }
   | { id: "nova-nota"; tipo: "nova-nota" }
   | { id: string; tipo: "arquivo"; rel: string };
 
 const ABA_HOME: Aba = { id: "home", tipo: "home" };
 const ABA_COMANDOS: Aba = { id: "comandos", tipo: "comandos" };
+const ABA_TERMINAL: Aba = { id: "terminal", tipo: "terminal" };
+const ABA_CONFIG: Aba = { id: "config", tipo: "config" };
+const ABA_PERFIL: Aba = { id: "perfil", tipo: "perfil" };
+
+const ROTULO: Record<string, string> = {
+  home: "Home",
+  comandos: "Comandos",
+  terminal: "Terminal",
+  config: "Configurações",
+  perfil: "Perfil",
+  "nova-nota": "Nova nota",
+};
 
 /** Painel que o rail de icones mostra na lateral. */
 type Painel = "arquivos" | "busca";
@@ -52,6 +75,8 @@ const MENU_PADRAO = 260;
 
 export default function App() {
   const [vaultPath, setVaultPath] = useState<string | null>(null);
+  /** null = ainda verificando; false = precisa entrar. */
+  const [conta, setConta] = useState<Account | null | false>(null);
   const [scope, setScope] = useState<Scope>("raw");
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [subjects, setSubjects] = useState<SubjectRef[]>([]);
@@ -72,9 +97,9 @@ export default function App() {
   const [busca, setBusca] = useState("");
   const [todos, setTodos] = useState<{ nome: string; rel: string }[]>([]);
 
-  /** Lado da lateral: em monitor grande, muita gente quer do outro lado. */
-  const [lado, setLado] = useState<"esq" | "dir">(() =>
-    localStorage.getItem("athena-lado") === "dir" ? "dir" : "esq",
+  /** Lado da lateral: quem usa em monitor grande costuma querer do outro. */
+  const [lado, setLado] = useState<"esq" | "dir">(
+    () => (localStorage.getItem("athena-lado") === "dir" ? "dir" : "esq"),
   );
 
   const [larguraMenu, setLarguraMenu] = useState(() => {
@@ -104,6 +129,19 @@ export default function App() {
     api.vault.get().then((v) => setVaultPath(v.path));
     return api.vault.onChange(refresh);
   }, [refresh]);
+
+  // A sessao do Supabase e a porta: sem ela, o app nem monta.
+  useEffect(() => {
+    if (!vaultPath) return;
+    let vivo = true;
+    api.account
+      .status()
+      .then((c) => vivo && setConta(c ?? false))
+      .catch(() => vivo && setConta(false));
+    return () => {
+      vivo = false;
+    };
+  }, [vaultPath]);
 
   useEffect(() => {
     if (!vaultPath) return;
@@ -196,6 +234,27 @@ export default function App() {
     window.addEventListener("mouseup", soltar);
   }
 
+  if (vaultPath && conta === null) {
+    return (
+      <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
+        <p style={{ color: "var(--c-muted)" }}>verificando a conta…</p>
+      </div>
+    );
+  }
+
+  if (vaultPath && conta === false) {
+    return (
+      <Login
+        vaultPath={vaultPath}
+        onEntrou={setConta}
+        onTrocarVault={async () => {
+          await api.vault.pick().catch(() => {});
+          window.location.reload();
+        }}
+      />
+    );
+  }
+
   if (!vaultPath) {
     return (
       <div style={{ height: "100%", display: "grid", placeItems: "center", padding: 24 }}>
@@ -213,6 +272,10 @@ export default function App() {
       </div>
     );
   }
+
+  // Passou pelos tres portoes acima (vault escolhido, conta verificada, conta
+  // presente): daqui pra baixo a conta existe.
+  const contaAtual = conta as Account;
 
   /** Conteudo de uma aba de arquivo: edita, le ou visualiza. */
   function Arquivo({ rel }: { rel: string }) {
@@ -272,22 +335,47 @@ export default function App() {
       </button>
       <button
         className="rail-btn"
+        data-active={ativa === "terminal"}
+        title="Terminal"
+        onClick={() => abrirFixa(ABA_TERMINAL)}
+      >
+        <IconTerminal />
+      </button>
+      <button
+        className="rail-btn"
         data-active={ativa === "comandos"}
-        title="Comandos"
+        title="Comandos do Athena (gerar, regerar, questões, remover)"
         onClick={() => abrirFixa(ABA_COMANDOS)}
       >
         <IconComandos />
       </button>
       <button
         className="rail-btn"
-        title="Publicar (abre em Comandos)"
-        onClick={() => abrirFixa(ABA_COMANDOS)}
+        data-active={ativa === "nova-nota"}
+        title="Nova nota"
+        onClick={() => abrirFixa({ id: "nova-nota", tipo: "nova-nota" })}
       >
-        <IconPublicar />
+        <IconMais />
       </button>
 
       <button
         className="rail-btn rail-fim"
+        data-active={ativa === "config"}
+        title="Configurações"
+        onClick={() => abrirFixa(ABA_CONFIG)}
+      >
+        <IconConfig />
+      </button>
+      <button
+        className="rail-btn"
+        data-active={ativa === "perfil"}
+        title={`Perfil — ${contaAtual.email}`}
+        onClick={() => abrirFixa(ABA_PERFIL)}
+      >
+        <IconPerfil />
+      </button>
+      <button
+        className="rail-btn"
         title={lado === "esq" ? "Mover a lateral para a direita" : "Mover a lateral para a esquerda"}
         onClick={() => setLado((l) => (l === "esq" ? "dir" : "esq"))}
       >
@@ -307,10 +395,7 @@ export default function App() {
       }}
     >
       <div style={{ padding: "14px 12px 8px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <strong style={{ fontWeight: 600 }}>Athena</strong>
-          <ThemeControl />
-        </div>
+        <strong style={{ fontWeight: 600 }}>Athena</strong>
         <p
           style={{
             margin: "4px 0 0",
@@ -377,15 +462,15 @@ export default function App() {
           <div className="scroll" style={{ flex: 1, padding: "0 8px 12px", minHeight: 0 }}>
             {(() => {
               const q = busca.trim().toLowerCase();
+              const achados = q
+                ? todos.filter((f) => (f.nome + f.rel).toLowerCase().includes(q)).slice(0, 60)
+                : [];
               if (!q)
                 return (
                   <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
                     Digite para procurar em raw/ e wiki/.
                   </p>
                 );
-              const achados = todos
-                .filter((f) => (f.nome + f.rel).toLowerCase().includes(q))
-                .slice(0, 60);
               if (achados.length === 0)
                 return (
                   <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
@@ -403,9 +488,7 @@ export default function App() {
                   }}
                   title={f.rel}
                 >
-                  <span
-                    style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                  >
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {f.nome}
                   </span>
                   <span
@@ -453,7 +536,7 @@ export default function App() {
             onDragStart={(e) => {
               setArrastando(i);
               e.dataTransfer.effectAllowed = "move";
-              // Chromium so inicia o arrasto com algum dado setado.
+              // Firefox/Chromium so iniciam o arrasto com algum dado setado.
               e.dataTransfer.setData("text/plain", a.id);
             }}
             onDragOver={(e) => {
@@ -469,13 +552,7 @@ export default function App() {
             title={a.tipo === "arquivo" ? a.rel : undefined}
           >
             <span className="tab-nome">
-              {a.tipo === "home"
-                ? "Home"
-                : a.tipo === "comandos"
-                  ? "Comandos"
-                  : a.tipo === "nova-nota"
-                    ? "Nova nota"
-                    : (a.rel.split("/").pop() ?? a.rel)}
+              {a.tipo === "arquivo" ? (a.rel.split("/").pop() ?? a.rel) : ROTULO[a.tipo]}
             </span>
             {a.id !== "home" && (
               <button
@@ -520,7 +597,9 @@ export default function App() {
           />
         )}
 
-        {aba?.tipo === "comandos" && <CommandBar target={target} busy={busy} onStarted={refresh} />}
+        {aba?.tipo === "comandos" && (
+          <CommandBar target={target} busy={busy} onStarted={refresh} />
+        )}
 
         {aba?.tipo === "nova-nota" && (
           <NoteEditor
@@ -532,6 +611,14 @@ export default function App() {
             }}
           />
         )}
+
+        {aba?.tipo === "terminal" && <TerminalPanel />}
+
+        {aba?.tipo === "config" && (
+          <Settings vaultPath={vaultPath} onTrocouVault={() => window.location.reload()} />
+        )}
+
+        {aba?.tipo === "perfil" && <Profile conta={contaAtual} onSaiu={() => setConta(false)} />}
 
         {aba?.tipo === "arquivo" && <Arquivo rel={aba.rel} />}
 
@@ -551,7 +638,9 @@ export default function App() {
         height: "100%",
         display: "grid",
         gridTemplateColumns:
-          lado === "esq" ? `44px ${larguraMenu}px 5px 1fr` : `1fr 5px ${larguraMenu}px 44px`,
+          lado === "esq"
+            ? `44px ${larguraMenu}px 5px 1fr`
+            : `1fr 5px ${larguraMenu}px 44px`,
       }}
     >
       {lado === "esq" ? (

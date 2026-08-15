@@ -63,17 +63,32 @@ const api = {
       return () => ipcRenderer.removeListener("session:event", handler);
     },
   },
+  term: {
+    run: (comando: string) => ipcRenderer.invoke("term:run", comando),
+    cancel: () => ipcRenderer.invoke("term:cancel"),
+    cwd: () => ipcRenderer.invoke("term:cwd"),
+    onEvent: (cb: (e: any) => void) => {
+      const handler = (_: unknown, e: any) => cb(e);
+      ipcRenderer.on("term:event", handler);
+      return () => ipcRenderer.removeListener("term:event", handler);
+    },
+  },
   account: {
     status: () => ipcRenderer.invoke("account:status"),
     login: (email: string, password: string) =>
       ipcRenderer.invoke("account:login", email, password),
     logout: () => ipcRenderer.invoke("account:logout"),
+    signUp: (email: string, senha: string, nome: string) =>
+      ipcRenderer.invoke("account:signUp", email, senha, nome),
+    update: (campos: { email?: string; password?: string; nome?: string }) =>
+      ipcRenderer.invoke("account:update", campos),
   },
   publish: {
     run: (name: "publish" | "pull", flags: string[] = []) =>
       ipcRenderer.invoke("publish:run", name, flags),
     available: () => ipcRenderer.invoke("publish:available"),
     autoPublish: (on?: boolean) => ipcRenderer.invoke("config:autoPublish", on),
+    autoPull: (on?: boolean) => ipcRenderer.invoke("config:autoPull", on),
     onLine: (cb: (line: string) => void) => {
       const handler = (_: unknown, line: string) => cb(line);
       ipcRenderer.on("publish:line", handler);

@@ -226,39 +226,66 @@ body {
    athena-web/src/app/globals.css. Copiar em vez de importar mantem o app
    independente do build do site; mexeu la, mexa aqui. */
 .hljs-comment,
-.hljs-quote { color: #6a9955; font-style: italic; }
+.hljs-quote {
+  color: #6a9955;
+  font-style: italic;
+}
 .hljs-keyword,
 .hljs-selector-tag,
-.hljs-name { color: #569cd6; }
+.hljs-name {
+  color: #569cd6;
+}
 .hljs-string,
 .hljs-attr,
 .hljs-regexp,
 .hljs-addition,
-.hljs-meta-string { color: #ce9178; }
+.hljs-meta-string {
+  color: #ce9178;
+}
 .hljs-number,
 .hljs-literal,
-.hljs-boolean { color: #b5cea8; }
+.hljs-boolean {
+  color: #b5cea8;
+}
 .hljs-title,
 .hljs-title.function_,
-.hljs-section { color: #dcdcaa; }
+.hljs-section {
+  color: #dcdcaa;
+}
 .hljs-title.class_,
 .hljs-type,
 .hljs-class .hljs-title,
-.hljs-built_in { color: #4ec9b0; }
+.hljs-built_in {
+  color: #4ec9b0;
+}
 .hljs-variable,
 .hljs-template-variable,
 .hljs-params,
-.hljs-attribute { color: #9cdcfe; }
+.hljs-attribute {
+  color: #9cdcfe;
+}
 .hljs-symbol,
 .hljs-bullet,
-.hljs-link { color: #4fc1ff; }
+.hljs-link {
+  color: #4fc1ff;
+}
 .hljs-meta,
-.hljs-meta .hljs-keyword { color: #c586c0; }
-.hljs-deletion { color: #f44747; }
+.hljs-meta .hljs-keyword {
+  color: #c586c0;
+}
+.hljs-deletion {
+  color: #f44747;
+}
 .hljs-operator,
-.hljs-punctuation { color: #d4d4d4; }
-.hljs-emphasis { font-style: italic; }
-.hljs-strong { font-weight: 600; }
+.hljs-punctuation {
+  color: #d4d4d4;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
 .prose table {
   width: 100%;
   font-size: 1.038rem;
@@ -974,4 +1001,43 @@ pre.term {
 /* Aba sendo arrastada: some do lugar de origem sem sumir da barra. */
 .tab[data-arrastando="true"] {
   opacity: 0.4;
+}
+
+/* Opcoes do painel Publicar (puxar ao abrir / publicar ao terminar). */
+.opcao {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--c-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------
+   Tela de login — porta de entrada, antes de qualquer coisa do vault.
+   ------------------------------------------------------------------ */
+.login-tela {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.login-caixa {
+  position: relative;
+  overflow: hidden;
+  width: min(420px, 100%);
+  padding: 28px 30px;
+}
+/* Botao que parece link: usado dentro de frase, nao vale virar .btn. */
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--c-accent);
+  font-family: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
 }
