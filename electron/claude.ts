@@ -1,6 +1,8 @@
 import { spawn, ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 export type Cmd = "ingest" | "redo" | "review" | "delete";
 
@@ -20,10 +22,13 @@ export type SessionState = "queued" | "running" | "awaiting" | "done" | "failed"
  * linha quando os dois chegam quase juntos.
  */
 export type SessionEvent =
-  | { id: string; kind: "state"; state: SessionState }
+  /** `cmd` no fim do job diz ao main se a publicacao precisa de --force. */
+  | { id: string; kind: "state"; state: SessionState; cmd?: Cmd }
   | { id: string; kind: "log"; level: "info" | "tool" | "error"; text: string; n?: number }
   | { id: string; kind: "assistant"; text: string; n?: number }
-  | { id: string; kind: "queue"; jobs: Job[] };
+  | { id: string; kind: "queue"; jobs: Job[] }
+  /** A conta do Claude Code caiu — a UI precisa oferecer o caminho do login. */
+  | { id: string; kind: "auth"; text: string };
 
 export type Line = {
   n: number;
@@ -40,6 +45,8 @@ export type Snapshot = {
   state: SessionState | null;
   lines: Line[];
   queue: Job[];
+  /** Conta do Claude Code caiu — o aviso precisa sobreviver a troca de aba. */
+  authNeeded: boolean;
 };
 
 const AWAITING_MARK = "AGUARDANDO RESPOSTA";
@@ -47,20 +54,49 @@ const AWAITING_MARK = "AGUARDANDO RESPOSTA";
 /** Teto do transcript em memoria — um ingest longo nao pode virar vazamento. */
 const MAX_LINES = 800;
 
+/**
+ * Texto do redo copiado do athena.bat. Nao e enfeite: `athena redo X Y` sozinho
+ * tende a "sair igual", porque o modelo enxerga a pagina anterior no disco e a
+ * reaproveita — e af regra nova nunca entra. A ordem explicita e o comando.
+ */
+const REDO_SUFFIX =
+  " - REESCREVA a pagina do ZERO lendo o material oficial de novo. NAO reaproveite a versao anterior da pagina, o espelho, nem o historico do git. Siga a ordem em que o professor apresentou o conteudo; informacoes administrativas da disciplina ficam onde ele as apresentou.";
+
 export function buildPrompt(job: Job): string {
   switch (job.cmd) {
     case "ingest":
       return `athena ${job.code} ${job.lesson}`;
     case "redo":
-      return `athena redo ${job.code} ${job.lesson}`;
+      return `athena ${job.code} ${job.lesson}${REDO_SUFFIX}`;
     case "review":
-      return `athena review ${job.code} ${job.lesson}`;
+      return `review ${job.code} ${job.lesson}`;
     case "delete":
       return job.lesson
         ? `athena delete ${job.code} ${job.lesson}`
         : `athena delete ${job.code}`;
   }
 }
+
+/**
+ * O erro de autenticacao do Claude Code nao e o login do Athena.
+ * Sao duas contas diferentes e a mensagem crua nao diz o que fazer.
+ */
+const AUTH_PATTERNS = [
+  /OAuth session expired/i,
+  /Failed to authenticate/i,
+  /Please run .?\/?login/i,
+  /not logged in/i,
+  /Invalid API key/i,
+];
+
+export function isAuthFailure(text: string): boolean {
+  return AUTH_PATTERNS.some((re) => re.test(text));
+}
+
+export const AUTH_HELP =
+  "Sua sessao do Claude Code expirou — isto NAO e o login do Athena (Supabase). " +
+  "Abra o terminal, rode `claude`, faca o /login na conta Pro e tente de novo. " +
+  "O botao abaixo abre um terminal ja no comando certo.";
 
 /**
  * Uma sessao por vez. O .ingest-status e um arquivo unico na raiz do vault:
@@ -74,6 +110,7 @@ export class ClaudeRunner extends EventEmitter {
   private lines: Line[] = [];
   private state: SessionState | null = null;
   private seq = 0;
+  private authWarned = false;
 
   constructor(
     private vaultRoot: string,
@@ -96,7 +133,12 @@ export class ClaudeRunner extends EventEmitter {
 
   /** O que um painel recem-montado precisa para se reconstituir inteiro. */
   snapshot(): Snapshot {
-    return { state: this.state, lines: [...this.lines], queue: this.pending };
+    return {
+      state: this.state,
+      lines: [...this.lines],
+      queue: this.pending,
+      authNeeded: this.authWarned,
+    };
   }
 
   enqueue(cmd: Cmd, code: string, lesson: string | null): Job {
@@ -166,7 +208,30 @@ export class ClaudeRunner extends EventEmitter {
     this.run(job);
   }
 
+  /**
+   * Zera o veredito antes de comecar — igual ao athena.bat.
+   *
+   * Sem isto, um `OK` de meia hora atras sobrevive a um ingest que falhou
+   * no meio, e o botao Publicar libera a publicacao de conteudo pela metade.
+   * O caminho em athena-web/ tambem some: o ingest as vezes grava o status
+   * relativo depois de mudar de diretorio, e o arquivo perdido la engana.
+   */
+  private clearStatus() {
+    for (const p of [
+      path.join(this.vaultRoot, ".ingest-status"),
+      path.join(this.vaultRoot, "athena-web", ".ingest-status"),
+    ]) {
+      try {
+        fs.rmSync(p, { force: true });
+      } catch {
+        // arquivo travado/ausente nao impede o comando de rodar
+      }
+    }
+  }
+
   private run(job: Job) {
+    this.clearStatus();
+
     const args = [
       "-p",
       "--output-format",
@@ -174,10 +239,12 @@ export class ClaudeRunner extends EventEmitter {
       "--input-format",
       "stream-json",
       "--verbose",
-      // O vault e confiavel e o fluxo do CLAUDE.md escreve arquivos e roda
-      // npm run build. Sem isso a sessao trava esperando aprovacao.
+      // Mesmo modo do athena.bat. Com acceptEdits, so a ESCRITA de arquivo e
+      // liberada: o passo 6 do CLAUDE.md copia o PDF para public/materials/
+      // por comando de shell, e a sessao ficaria pendurada esperando um
+      // "pode?" que ninguem responde no modo -p.
       "--permission-mode",
-      "acceptEdits",
+      "bypassPermissions",
     ];
 
     const proc = spawn(this.claudeBin, args, {
@@ -189,6 +256,7 @@ export class ClaudeRunner extends EventEmitter {
 
     this.active = { job, proc };
     this.buffer = "";
+    this.authWarned = false;
     this.emitEvent({ id: job.id, kind: "state", state: "running" });
     this.emitEvent({ id: job.id, kind: "log", level: "info", text: `> ${job.label}` });
 
@@ -202,14 +270,11 @@ export class ClaudeRunner extends EventEmitter {
     proc.stdin.write(JSON.stringify(first) + "\n");
 
     proc.stdout.on("data", (chunk: Buffer) => this.onStdout(job, chunk));
-    proc.stderr.on("data", (chunk: Buffer) =>
-      this.emitEvent({
-        id: job.id,
-        kind: "log",
-        level: "error",
-        text: chunk.toString(),
-      }),
-    );
+    proc.stderr.on("data", (chunk: Buffer) => {
+      const text = chunk.toString();
+      this.emitEvent({ id: job.id, kind: "log", level: "error", text });
+      this.checkAuth(job, text);
+    });
 
     proc.on("error", (err) => {
       this.emitEvent({
@@ -241,14 +306,27 @@ export class ClaudeRunner extends EventEmitter {
       try {
         msg = JSON.parse(trimmed);
       } catch {
+        // Erro de autenticacao vem como texto solto, fora do stream-json.
         this.emitEvent({ id: job.id, kind: "log", level: "info", text: trimmed });
+        this.checkAuth(job, trimmed);
         continue;
       }
       this.handleMessage(job, msg);
     }
   }
 
+  /** Emite o aviso de login uma vez por job — a mensagem repete no stream. */
+  private checkAuth(job: Job, text: string) {
+    if (this.authWarned || !isAuthFailure(text)) return;
+    this.authWarned = true;
+    this.emitEvent({ id: job.id, kind: "auth", text: AUTH_HELP });
+    this.emitEvent({ id: job.id, kind: "log", level: "error", text: AUTH_HELP });
+  }
+
   private handleMessage(job: Job, msg: any) {
+    if (msg.type === "result" && typeof msg.result === "string") {
+      this.checkAuth(job, msg.result);
+    }
     if (msg.type === "system" && msg.subtype === "init") {
       this.emitEvent({
         id: job.id,
@@ -288,9 +366,18 @@ export class ClaudeRunner extends EventEmitter {
   }
 
   private finish(job: Job, state: SessionState) {
-    this.emitEvent({ id: job.id, kind: "state", state });
+    this.emitEvent({ id: job.id, kind: "state", state, cmd: job.cmd });
     this.active = null;
     this.pump();
+  }
+
+  /**
+   * Linha vinda de fora (publish, pull). Entra no mesmo transcript de proposito:
+   * o usuario olha um painel so para saber o que esta acontecendo, e o passo
+   * [2/2] do athena.bat sempre foi parte da mesma operacao.
+   */
+  log(text: string, level: "info" | "tool" | "error" = "info") {
+    this.emitEvent({ id: this.active?.job.id ?? "externo", kind: "log", level, text });
   }
 }
 

@@ -27,6 +27,18 @@ const api = {
       ipcRenderer.invoke("fs:describe", code, lesson),
     slug: (input: string) => ipcRenderer.invoke("fs:slug", input),
     reveal: (rel: string) => ipcRenderer.invoke("fs:reveal", rel),
+    mkdir: (rel: string) => ipcRenderer.invoke("fs:mkdir", rel),
+    create: (rel: string, content = "") => ipcRenderer.invoke("fs:create", rel, content),
+    rename: (rel: string, nome: string) => ipcRenderer.invoke("fs:rename", rel, nome),
+    trash: (rel: string) => ipcRenderer.invoke("fs:trash", rel),
+    openExternal: (rel: string) => ipcRenderer.invoke("fs:openExternal", rel),
+    pasteImage: (base: string, ext: string, data: Uint8Array) =>
+      ipcRenderer.invoke("fs:pasteImage", base, ext, data),
+    lessons: () => ipcRenderer.invoke("fs:lessons"),
+  },
+  clipboard: {
+    read: () => ipcRenderer.invoke("clipboard:read"),
+    write: (text: string) => ipcRenderer.invoke("clipboard:write", text),
   },
   status: {
     get: () => ipcRenderer.invoke("status:get"),
@@ -48,9 +60,30 @@ const api = {
       return () => ipcRenderer.removeListener("session:event", handler);
     },
   },
-  git: {
-    summary: () => ipcRenderer.invoke("git:summary"),
-    publish: (message: string) => ipcRenderer.invoke("git:publish", message),
+  account: {
+    status: () => ipcRenderer.invoke("account:status"),
+    login: (email: string, password: string) =>
+      ipcRenderer.invoke("account:login", email, password),
+    logout: () => ipcRenderer.invoke("account:logout"),
+  },
+  publish: {
+    run: (name: "publish" | "pull", flags: string[] = []) =>
+      ipcRenderer.invoke("publish:run", name, flags),
+    available: () => ipcRenderer.invoke("publish:available"),
+    autoPublish: (on?: boolean) => ipcRenderer.invoke("config:autoPublish", on),
+    onLine: (cb: (line: string) => void) => {
+      const handler = (_: unknown, line: string) => cb(line);
+      ipcRenderer.on("publish:line", handler);
+      return () => ipcRenderer.removeListener("publish:line", handler);
+    },
+    onState: (cb: (s: { running: boolean; name: string }) => void) => {
+      const handler = (_: unknown, s: { running: boolean; name: string }) => cb(s);
+      ipcRenderer.on("publish:state", handler);
+      return () => ipcRenderer.removeListener("publish:state", handler);
+    },
+  },
+  claude: {
+    openLogin: () => ipcRenderer.invoke("claude:openLogin"),
   },
 };
 

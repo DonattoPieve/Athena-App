@@ -16,6 +16,9 @@
   --c-accent-light: #f0e6fa;
   --c-code-bg: #240046;
   --c-code-text: #e0aaff;
+  /* Bloco de codigo dentro da prosa. Separado do terminal da sessao de
+     proposito: no site ele escurece no dark, o terminal daqui nao. */
+  --c-prose-code-bg: #240046;
 
   --sv-accent: #5a189a;
   --sv-bright: #b15cff;
@@ -43,6 +46,7 @@
   --c-muted: #8c8c96;
   --c-accent: #b15cff;
   --c-accent-light: rgba(177, 92, 255, 0.14);
+  --c-prose-code-bg: #101014;
   --dots: rgba(177, 92, 255, 0.1);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.45);
   --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.55);
@@ -107,6 +111,364 @@ body {
   line-height: 1.8;
 }
 
+/* ------------------------------------------------------------------
+   .prose — PORTE DIRETO de athena-web/src/app/globals.css.
+   Mesmas medidas do site (Arial 1.188rem/1.8, h2 com regua, tabela
+   com cabecalho em surface), traduzidas dos triplets `rgb(var(--c-*))`
+   do site para os tokens em hex daqui. Editar aqui e no site junto:
+   a nota tem que parecer a mesma coisa nos dois lugares.
+   ------------------------------------------------------------------ */
+.prose {
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--c-text);
+}
+.prose > :first-child {
+  margin-top: 0;
+}
+.prose code,
+.prose pre,
+.prose pre code {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+.prose h1 {
+  font-size: 1.888rem;
+  font-weight: 600;
+  margin: 1.6rem 0 0.8rem;
+}
+.prose h2 {
+  font-size: 1.438rem;
+  font-weight: 500;
+  margin: 1.8rem 0 0.6rem;
+  border-bottom: 1px solid var(--c-border);
+  padding-bottom: 0.4rem;
+}
+.prose h3 {
+  font-size: 1.238rem;
+  font-weight: 500;
+  margin: 1.3rem 0 0.4rem;
+}
+.prose p {
+  font-size: 1.188rem;
+  line-height: 1.8;
+  margin: 0 0 0.9rem;
+  color: color-mix(in srgb, var(--c-text) 95%, transparent);
+}
+.prose ul,
+.prose ol {
+  font-size: 1.188rem;
+  line-height: 1.8;
+  margin: 0 0 0.9rem;
+  padding-left: 1.3rem;
+  color: color-mix(in srgb, var(--c-text) 95%, transparent);
+}
+/* O preflight do Tailwind zera list-style: sem isto a lista vira paragrafo
+   solto e some a diferenca entre item e texto corrido. */
+.prose ul {
+  list-style: disc;
+}
+.prose ul ul {
+  list-style: circle;
+}
+.prose ol {
+  list-style: decimal;
+}
+.prose li::marker {
+  color: var(--c-muted);
+}
+.prose li {
+  margin-bottom: 0.35rem;
+}
+.prose li > p {
+  margin: 0;
+}
+.prose code {
+  font-size: 1.087rem;
+  background: var(--c-surface);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  color: var(--c-accent);
+}
+.prose pre {
+  background: var(--c-prose-code-bg);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  overflow-x: auto;
+  box-shadow: var(--shadow-card);
+}
+.prose pre code {
+  background: transparent;
+  color: #d4d4d4;
+  padding: 0;
+  font-size: 1.067rem;
+}
+.prose table {
+  width: 100%;
+  font-size: 1.038rem;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+.prose th {
+  background: var(--c-surface);
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border: 1px solid var(--c-border);
+  font-size: 0.968rem;
+}
+.prose td {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--c-border);
+}
+.prose blockquote {
+  border-left: 3px solid var(--c-accent);
+  padding-left: 1rem;
+  color: var(--c-muted);
+  font-style: italic;
+  margin: 1rem 0;
+}
+.prose strong {
+  font-weight: 600;
+  color: var(--c-text);
+}
+.prose a {
+  color: var(--c-accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--c-accent) 40%, transparent);
+  text-underline-offset: 3px;
+}
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--c-border);
+  margin: 1.5rem 0;
+}
+/* Tarefas: o marcador e o checkbox, nao a bolinha da lista. */
+.prose ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.2rem;
+}
+.prose ul[data-type="taskList"] li::marker {
+  content: "";
+}
+.prose ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.prose ul[data-type="taskList"] li > label {
+  margin-top: 0.45rem;
+}
+
+/* ------------------------------------------------------------------
+   Editor (Tiptap). A area editavel usa .prose: o que voce digita ja
+   aparece com a medida do site, sem "preview" separado.
+   ------------------------------------------------------------------ */
+.editor-shell {
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xl);
+  background: var(--c-card);
+  overflow: hidden;
+  transition: border-color 160ms, box-shadow 160ms;
+}
+.editor-shell:focus-within {
+  border-color: color-mix(in srgb, var(--c-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 10%, transparent);
+}
+.editor-shell .ProseMirror {
+  padding: 18px 22px 24px;
+  min-height: 300px;
+  max-height: 50vh;
+  overflow-y: auto;
+  outline: none;
+}
+/* Placeholder: so na primeira linha e so com o documento vazio. */
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--c-muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+/* Celula selecionada da tabela — sem isto nao da para ver o que sera apagado. */
+.ProseMirror .selectedCell {
+  position: relative;
+}
+.ProseMirror .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--c-accent-light);
+  pointer-events: none;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-surface);
+}
+.toolbar-group {
+  display: flex;
+  gap: 3px;
+  padding-right: 7px;
+  margin-right: 4px;
+  border-right: 1px solid var(--c-border);
+}
+.toolbar-group:last-child {
+  border-right: none;
+}
+.btn.tool {
+  padding: 3px 8px;
+  font-size: 11px;
+  border-radius: var(--r-sm);
+  background: transparent;
+  border-color: transparent;
+  color: var(--c-muted);
+}
+.btn.tool:hover:not(:disabled) {
+  background: var(--c-card);
+  color: var(--c-accent);
+}
+
+/* Modo markdown: texto exatamente como vai para o disco. */
+.mono-edit {
+  min-height: 300px;
+  max-height: 50vh;
+  resize: vertical;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre;
+  overflow: auto;
+}
+
+/* ------------------------------------------------------------------
+   Menu de contexto (botao direito). Desenhado pelo app, como VS Code e
+   Obsidian fazem: os itens dependem do estado do vault e do tema.
+   ------------------------------------------------------------------ */
+.ctx-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 210px;
+  padding: 5px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-card);
+  box-shadow: var(--shadow-card-hover);
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--c-text);
+  font-family: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.ctx-item:hover:not(:disabled) {
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+}
+.ctx-item:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.ctx-item[data-danger="true"]:hover:not(:disabled) {
+  background: rgba(226, 75, 74, 0.12);
+  color: #e24b4a;
+}
+.ctx-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--c-muted);
+}
+.ctx-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--c-border);
+}
+
+/* ------------------------------------------------------------------
+   Modal do app — substitui o confirm() do navegador, que abre uma janela
+   do Windows sem tema, sem paleta e sem espaco para explicar o que a
+   acao faz.
+   ------------------------------------------------------------------ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(10, 10, 12, 0.55);
+  backdrop-filter: blur(2px);
+  animation: modal-in 120ms ease-out;
+}
+.modal {
+  width: min(440px, 100%);
+  padding: 20px 22px;
+  box-shadow: var(--shadow-card-hover);
+  animation: modal-in 140ms ease-out;
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* Caminho do arquivo: informacao de apoio, nao terminal. O roxo do
+   pre.term pesa demais dentro de um modal ja carregado de aviso. */
+.modal-detalhe {
+  margin: 12px 0 0;
+  padding: 8px 11px;
+  max-height: 140px;
+  overflow: auto;
+  border: 1px solid var(--c-border);
+  border-left: 2px solid var(--c-accent);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+/* Visualizador de material: o PDF ocupa a area toda, sem moldura interna. */
+.viewer {
+  flex: 1;
+  min-height: 420px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  background: var(--c-surface);
+}
+.viewer iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* Frontmatter na leitura: metadado, nao conteudo. */
+.frontmatter {
+  margin: 0 0 14px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--c-border);
+  color: var(--c-muted);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
 .label {
   font-size: 10px;
   font-weight: 500;
@@ -157,6 +519,21 @@ body {
 .btn-danger:hover:not(:disabled) {
   border-color: #e24b4a;
   color: #e24b4a;
+}
+
+/* Destrutivo cheio, para o modal: contorno se perde ao lado do Cancelar.
+   Fica JUNTO das outras variantes de propósito — como tem a mesma
+   especificidade de `.btn`, definir antes dela deixaria o fundo branco. */
+.btn-danger-solid {
+  background: #e24b4a;
+  border-color: #e24b4a;
+  color: #fff;
+  font-weight: 500;
+}
+.btn-danger-solid:hover:not(:disabled) {
+  background: #c93e3d;
+  border-color: #c93e3d;
+  color: #fff;
 }
 
 /* Segmento selecionado (raw · wiki). Sem isto os dois botoes ficam iguais e

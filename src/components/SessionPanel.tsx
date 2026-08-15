@@ -20,6 +20,7 @@ export function SessionPanel({
   const [state, setState] = useState<SessionState | null>(null);
   const [queue, setQueue] = useState<Job[]>([]);
   const [reply, setReply] = useState("");
+  const [authNeeded, setAuthNeeded] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   // O transcript mora no main. Ao montar (troca de aba, reload do Vite) o
@@ -36,6 +37,7 @@ export function SessionPanel({
       });
       setState(s.state);
       setQueue(s.queue);
+      setAuthNeeded(s.authNeeded);
       onStateChange(busyOf(s.state));
     });
     return () => {
@@ -47,7 +49,10 @@ export function SessionPanel({
     return api.session.onEvent((e: SessionEvent) => {
       if (e.kind === "state") {
         setState(e.state);
+        if (e.state === "running") setAuthNeeded(false);
         onStateChange(busyOf(e.state));
+      } else if (e.kind === "auth") {
+        setAuthNeeded(true);
       } else if (e.kind === "queue") {
         setQueue(e.jobs);
       } else if (e.kind === "log") {
@@ -88,6 +93,29 @@ export function SessionPanel({
           </button>
         )}
       </div>
+
+      {authNeeded && (
+        <div
+          style={{
+            marginBottom: 10,
+            padding: 12,
+            border: "1px solid #ba7517",
+            borderRadius: "var(--r-xl)",
+            background: "var(--c-surface)",
+          }}
+        >
+          <p style={{ margin: "0 0 4px", fontWeight: 500, color: "#ba7517" }}>
+            A conta do Claude Code caiu
+          </p>
+          <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--c-muted)" }}>
+            Isto <strong>não</strong> é o login do Athena (Supabase) — é a sua conta Pro, que o app
+            usa para rodar o ingest. O login dela é no terminal, uma vez.
+          </p>
+          <button className="btn" onClick={() => api.claude.openLogin()}>
+            Abrir terminal no <code>claude</code>
+          </button>
+        </div>
+      )}
 
       <pre className="term scroll" style={{ flex: 1, minHeight: 160 }}>
         {lines.length === 0

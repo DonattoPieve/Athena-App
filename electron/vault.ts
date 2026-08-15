@@ -16,6 +16,10 @@ const WRITABLE_PREFIXES = [
   "raw/concepts",
   "raw/games",
   "raw/studies",
+  // Destino das imagens coladas na nota: e o primeiro lugar onde o passo 1 do
+  // CLAUDE.md procura ao encontrar `![[arquivo]]`. Colar em outra pasta
+  // significa imagem que o ingest nao acha.
+  "raw/attachments",
 ];
 
 const IGNORED = new Set([
@@ -241,6 +245,101 @@ export class Vault {
       if (hit) t.material = path.posix.join(matFolder, hit);
     }
     return t;
+  }
+
+  // ------------------------------------------------------------------
+  // Operacoes de arquivo do explorer.
+  //
+  // Todas passam por isWritable(): a arvore mostra `raw/INATEL` e `wiki/`,
+  // e um menu de contexto que apagasse qualquer no seria a maneira mais
+  // rapida de perder o material do professor ou uma pagina gerada.
+  // ------------------------------------------------------------------
+
+  private assertWritable(rel: string, acao: string) {
+    if (!this.isWritable(rel)) {
+      throw new Error(
+        `${acao} bloqueado em "${rel}". O app so mexe em raw/subjects, raw/concepts, ` +
+          `raw/games, raw/studies e raw/attachments. raw/INATEL/ e wiki/ sao somente leitura.`,
+      );
+    }
+  }
+
+  async mkdir(rel: string): Promise<void> {
+    this.assertWritable(rel, "Criar pasta");
+    const abs = this.resolve(rel);
+    if (fsSync.existsSync(abs)) throw new Error(`Ja existe: ${rel}`);
+    await fs.mkdir(abs, { recursive: true });
+  }
+
+  /** Cria arquivo novo. Recusa sobrescrever — isso e trabalho do usuario. */
+  async create(rel: string, content = ""): Promise<void> {
+    this.assertWritable(rel, "Criar arquivo");
+    const abs = this.resolve(rel);
+    if (fsSync.existsSync(abs)) throw new Error(`Ja existe: ${rel}`);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, content, "utf8");
+  }
+
+  /** Renomeia dentro da mesma pasta. Origem e destino precisam ser gravaveis. */
+  async rename(rel: string, nome: string): Promise<string> {
+    this.assertWritable(rel, "Renomear");
+    if (!nome.trim() || /[\\/:*?"<>|]/.test(nome)) {
+      throw new Error(`Nome invalido: "${nome}"`);
+    }
+    const destino = path.posix.join(path.posix.dirname(rel), nome.trim());
+    this.assertWritable(destino, "Renomear");
+    const abs = this.resolve(destino);
+    if (fsSync.existsSync(abs)) throw new Error(`Ja existe: ${destino}`);
+    await fs.rename(this.resolve(rel), abs);
+    return destino;
+  }
+
+  /** Caminho absoluto para a lixeira do sistema (quem chama e o main). */
+  trashTarget(rel: string): string {
+    this.assertWritable(rel, "Apagar");
+    return this.resolve(rel);
+  }
+
+  /**
+   * Nome livre dentro de uma pasta: `base.ext`, `base-2.ext`, `base-3.ext`...
+   * Colar duas imagens seguidas nao pode sobrescrever a primeira.
+   */
+  async freeName(dirRel: string, base: string, ext: string): Promise<string> {
+    const dir = this.resolve(dirRel);
+    await fs.mkdir(dir, { recursive: true });
+    const existentes = new Set(await this.listDir(dirRel));
+    let nome = `${base}.${ext}`;
+    let i = 2;
+    while (existentes.has(nome)) nome = `${base}-${i++}.${ext}`;
+    return nome;
+  }
+
+  /** Grava binario (imagem colada). Mesmas guardas da escrita de texto. */
+  async writeBinary(rel: string, data: Uint8Array): Promise<void> {
+    this.assertWritable(rel, "Gravar");
+    const abs = this.resolve(rel);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, data);
+  }
+
+  /**
+   * Slugs de todas as aulas ja publicadas — alimenta o seletor de `[[link]]`.
+   * Reviews ficam de fora: o CLAUDE.md nao liga review no MOC, e oferecer um
+   * link para ele no editor convida a criar exatamente essa aresta errada.
+   */
+  async lessons(): Promise<{ slug: string; subject: string }[]> {
+    const base = "wiki/subjects";
+    const out: { slug: string; subject: string }[] = [];
+    for (const materia of await this.listDir(base)) {
+      const dir = path.posix.join(base, materia);
+      for (const f of await this.listDir(dir)) {
+        if (!f.endsWith(".md")) continue;
+        const slug = f.slice(0, -3);
+        if (slug.endsWith("-review") || slug === materia) continue;
+        out.push({ slug, subject: materia });
+      }
+    }
+    return out.sort((a, b) => a.slug.localeCompare(b.slug));
   }
 
   /** Le o .ingest-status da RAIZ do vault (nunca relativo ao cwd). */

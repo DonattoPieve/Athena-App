@@ -5,10 +5,14 @@ import { CommandBar } from "./components/CommandBar";
 import { SessionPanel } from "./components/SessionPanel";
 import { PublishPanel } from "./components/PublishPanel";
 import { NoteEditor } from "./components/NoteEditor";
+import { MarkdownView } from "./components/MarkdownView";
+import { MaterialView } from "./components/MaterialView";
 import { ThemeControl } from "./components/ThemeControl";
 
 type Scope = "raw" | "wiki";
-type View = "commands" | "new-note" | "read";
+type View = "commands" | "new-note" | "read" | "material";
+
+const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
 
 export default function App() {
   const [vaultPath, setVaultPath] = useState<string | null>(null);
@@ -140,6 +144,13 @@ export default function App() {
           >
             Leitura
           </button>
+          <button
+            className="nav-item"
+            data-active={view === "material"}
+            onClick={() => setView("material")}
+          >
+            Material
+          </button>
         </div>
 
         <div style={{ padding: "6px 12px 4px", display: "flex", gap: 6 }}>
@@ -169,7 +180,10 @@ export default function App() {
             nodes={tree}
             selected={selected}
             onSelect={setSelected}
+            onChanged={refresh}
+            scope={scope}
             readOnly={scope === "wiki"}
+            onOpen={(rel) => setView(MATERIAL.test(rel) ? "material" : "read")}
           />
         </div>
       </aside>
@@ -200,9 +214,7 @@ export default function App() {
                 <p className="label" style={{ marginTop: 0 }}>
                   {selected}
                 </p>
-                <div className="prose-body" style={{ whiteSpace: "pre-wrap" }}>
-                  {fileText}
-                </div>
+                <MarkdownView source={fileText} />
               </>
             ) : (
               <p style={{ color: "var(--c-muted)", margin: 0 }}>
@@ -211,6 +223,18 @@ export default function App() {
             )}
           </div>
         )}
+
+        {view === "material" &&
+          (selected && MATERIAL.test(selected) ? (
+            <MaterialView rel={selected} />
+          ) : (
+            <div className="card" style={{ padding: 24 }}>
+              <p style={{ color: "var(--c-muted)", margin: 0 }}>
+                Selecione um PDF ou PPT na árvore — os do professor estão em{" "}
+                <code>raw/INATEL/</code>.
+              </p>
+            </div>
+          ))}
 
         {/* Painel unico e sempre montado: trocar de aba nao pode desmontar a
             sessao — era assim que o log e o campo do AGUARDANDO RESPOSTA

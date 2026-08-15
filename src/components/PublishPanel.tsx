@@ -1,51 +1,78 @@
 import { useEffect, useState } from "react";
-import { api, type GitSummary, type IngestStatus } from "../lib/api";
+import { api, type Account, type IngestStatus } from "../lib/api";
 
+/**
+ * Publicar = Supabase + R2, nao git.
+ *
+ * O painel antigo fazia `git add . && git commit && git push`. Desde
+ * 2026-08-02 isso nao publica nada: `raw/` e `wiki/` estao no .gitignore do
+ * vault e o conteudo viaja pelo banco. O botao dizia "publicado" e o site
+ * ficava igual — o pior tipo de bug, o que parece ter funcionado.
+ *
+ * A guarda continua a mesma do athena.bat: sem `OK` no `.ingest-status`,
+ * nada sai daqui.
+ */
 export function PublishPanel({ refreshKey }: { refreshKey: number }) {
-  const [summary, setSummary] = useState<GitSummary | null>(null);
   const [status, setStatus] = useState<IngestStatus>("NONE");
-  const [message, setMessage] = useState("notes: atualiza wiki");
-  const [busy, setBusy] = useState(false);
+  const [account, setAccount] = useState<Account | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [running, setRunning] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [canForce, setCanForce] = useState(false);
+  const [auto, setAuto] = useState(true);
+  const [tools, setTools] = useState({ publish: true, pull: true });
+
+  // login
+  const [showLogin, setShowLogin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.status.get().then(setStatus);
+    api.publish.available().then(setTools).catch(() => {});
+    api.publish.autoPublish().then(setAuto).catch(() => {});
+  }, [refreshKey]);
+
+  useEffect(() => api.status.onChange(setStatus), []);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([api.git.summary().catch(() => null), api.status.get()]).then(
-      ([s, st]) => {
-        if (!alive) return;
-        setSummary(s);
-        setStatus(st);
-      },
-    );
+    setChecking(true);
+    api.account
+      .status()
+      .then((a) => alive && setAccount(a))
+      .catch(() => alive && setAccount(null))
+      .finally(() => alive && setChecking(false));
     return () => {
       alive = false;
     };
   }, [refreshKey]);
 
-  // O veredito muda fora do ciclo da arvore: o main avisa quando o
-  // .ingest-status e reescrito (ou quando um comando termina) e o git tambem
-  // mudou junto. Sem isto o painel congela no FAIL do inicio do ingest.
-  useEffect(() => {
-    return api.status.onChange((s) => {
-      setStatus(s);
-      api.git.summary().then(setSummary).catch(() => setSummary(null));
-    });
-  }, []);
+  useEffect(() => api.publish.onState((s) => setRunning(s.running ? s.name : null)), []);
 
-  const dirty = (summary?.changes.length ?? 0) > 0 || (summary?.ahead ?? 0) > 0;
-  const canPublish = status === "OK" && dirty && !busy;
-
-  async function publish() {
-    setBusy(true);
+  async function run(name: "publish" | "pull", flags: string[] = []) {
     setResult(null);
+    setCanForce(false);
+    const r = await api.publish.run(name, flags);
+    setResult(r.output.trim() || (r.ok ? "Concluido." : "Falhou sem mensagem."));
+    setCanForce(r.canForce);
+  }
+
+  async function doLogin() {
+    setLoginError(null);
     try {
-      setResult(await api.git.publish(message));
+      const a = await api.account.login(email.trim(), password);
+      setAccount(a);
+      setPassword("");
+      setShowLogin(false);
     } catch (e) {
-      setResult(String((e as Error).message));
-    } finally {
-      setBusy(false);
+      setLoginError((e as Error).message);
     }
   }
+
+  const busy = running !== null;
+  const canPublish = status === "OK" && !!account && !busy && tools.publish;
 
   return (
     <div className="card" style={{ padding: 16 }}>
@@ -54,8 +81,7 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
         <span
           style={{
             fontSize: 12,
-            color:
-              status === "OK" ? "#1d9e75" : status === "FAIL" ? "#e24b4a" : "var(--c-muted)",
+            color: status === "OK" ? "#1d9e75" : status === "FAIL" ? "#e24b4a" : "var(--c-muted)",
           }}
         >
           {status === "OK"
@@ -64,39 +90,152 @@ export function PublishPanel({ refreshKey }: { refreshKey: number }) {
               ? "último comando não concluiu — publicação bloqueada"
               : "nenhum comando executado nesta máquina"}
         </span>
-        {summary && (
-          <span style={{ marginLeft: "auto", color: "var(--c-muted)", fontSize: 12 }}>
-            {summary.branch} · {summary.changes.length} alterações
-          </span>
+
+        <label
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 11,
+            color: "var(--c-muted)",
+            cursor: "pointer",
+          }}
+          title="Igual ao passo [2/2] do athena.bat: terminou com OK, vai pro banco"
+        >
+          <input
+            type="checkbox"
+            checked={auto}
+            onChange={(e) => {
+              setAuto(e.target.checked);
+              api.publish.autoPublish(e.target.checked);
+            }}
+          />
+          publicar ao terminar
+        </label>
+      </div>
+
+      {/* ---- conta ---- */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "8px 10px",
+          marginBottom: 12,
+          border: "1px solid var(--c-border)",
+          borderRadius: "var(--r-lg)",
+          background: "var(--c-surface)",
+          fontSize: 12,
+        }}
+      >
+        {checking ? (
+          <span style={{ color: "var(--c-muted)" }}>verificando a conta…</span>
+        ) : account ? (
+          <>
+            <span style={{ color: "var(--c-muted)" }}>publicando como</span>
+            <strong>{account.name}</strong>
+            <span style={{ color: "var(--c-muted)" }}>{account.email}</span>
+            <button
+              className="btn"
+              style={{ marginLeft: "auto", padding: "3px 10px", fontSize: 11 }}
+              onClick={async () => {
+                await api.account.logout();
+                setAccount(null);
+              }}
+            >
+              sair
+            </button>
+          </>
+        ) : (
+          <>
+            <span style={{ color: "#ba7517" }}>
+              sem conta nesta máquina — o conteúdo não sai do disco
+            </span>
+            <button
+              className="btn"
+              style={{ marginLeft: "auto", padding: "3px 10px", fontSize: 11 }}
+              onClick={() => setShowLogin((s) => !s)}
+            >
+              entrar
+            </button>
+          </>
         )}
       </div>
 
-      {summary && summary.changes.length > 0 && (
-        <pre className="term scroll" style={{ maxHeight: 160, marginBottom: 12 }}>
-          {summary.changes.map((c) => `${c.status.padEnd(2)} ${c.file}`).join("\n")}
-        </pre>
+      {showLogin && !account && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>
+            Mesma conta do <code>athena login</code>. A senha não é gravada — fica só o token de
+            renovação em <code>.athena/session.json</code>.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              className="field"
+              placeholder="E-mail"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <input
+              className="field"
+              type="password"
+              placeholder="Senha"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && doLogin()}
+            />
+            <button className="btn btn-primary" onClick={doLogin} disabled={!email || !password}>
+              Entrar
+            </button>
+          </div>
+          {loginError && <p style={{ margin: 0, color: "#e24b4a", fontSize: 12 }}>{loginError}</p>}
+        </div>
       )}
 
-      {summary && summary.changes.length === 0 && (
-        <p style={{ color: "var(--c-muted)", fontSize: 12, margin: "0 0 12px" }}>
-          Nada para publicar.
+      {/* ---- ações ---- */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button className="btn btn-primary" disabled={!canPublish} onClick={() => run("publish")}>
+          {running === "publish" ? "Publicando…" : "Publicar"}
+        </button>
+        <button
+          className="btn"
+          disabled={busy || !tools.publish}
+          onClick={() => run("publish", ["--dry-run"])}
+          title="Mostra o que seria enviado, sem enviar nada"
+        >
+          Prévia
+        </button>
+        <button
+          className="btn"
+          disabled={busy || !account || !tools.pull}
+          onClick={() => run("pull")}
+          title="Traz do banco e do R2 para este disco — rode ao sentar na outra máquina"
+        >
+          {running === "pull" ? "Puxando…" : "Puxar do banco"}
+        </button>
+        {canForce && (
+          <button
+            className="btn btn-danger"
+            disabled={busy}
+            onClick={() => run("publish", ["--force"])}
+            title="O publish parou por desproporção. Só use se este disco realmente é a versão certa."
+          >
+            Publicar mesmo assim (--force)
+          </button>
+        )}
+      </div>
+
+      {!tools.publish && (
+        <p style={{ margin: "10px 0 0", fontSize: 12, color: "#e24b4a" }}>
+          Não achei <code>athena-web/scripts/athena-publish.mjs</code> no vault — é ele que leva o
+          conteúdo para o banco.
         </p>
       )}
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          className="field"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Mensagem do commit"
-        />
-        <button className="btn btn-primary" disabled={!canPublish} onClick={publish}>
-          {busy ? "Publicando…" : "Publicar"}
-        </button>
-      </div>
-
       {result && (
-        <pre className="term" style={{ marginTop: 12, maxHeight: 140, overflow: "auto" }}>
+        <pre className="term scroll" style={{ marginTop: 12, maxHeight: 220 }}>
           {result}
         </pre>
       )}

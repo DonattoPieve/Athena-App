@@ -117,32 +117,145 @@ meio de um ingest não apaga o log nem a pergunta pendente.
 existe um `cmd.exe` entre o app e o `claude`; matar só o pai deixaria o ingest
 vivo escrevendo arquivos. O cancelamento usa `taskkill /T /F`.
 
-### Publicação
+### Publicação — Supabase e R2, não git
 
-O botão Publicar não chama o Claude — é só git. Ele mostra o `git status` antes
-e só habilita quando `.ingest-status` está `OK`. Mesma guarda do `.bat`, agora
-visível.
+Desde 2026-08-02 `raw/` e `wiki/` estão no `.gitignore` do vault: o repositório
+guarda o **código** do athena-web, e o **conteúdo** viaja pelo Supabase (texto) e
+pelo Cloudflare R2 (PDF, PPT, imagem). Quem faz isso é
+`athena-web/scripts/athena-publish.mjs`, o mesmo script do passo [2/2] do `.bat`.
+
+O app **roda o script do vault** em vez de reimplementar o espelho: a guarda
+contra máquina desatualizada, a remoção de órfãos e o upload incremental
+continuam num lugar só, valendo pelo terminal e por aqui.
+
+- **Publicar** — `athena publish`. Bloqueado sem `OK` no `.ingest-status` e sem
+  conta.
+- **Prévia** — `--dry-run`: mostra o que subiria, sem subir.
+- **Puxar do banco** — `athena pull`, para a segunda máquina.
+- **`--force`** só aparece quando o próprio script pede, ao parar por
+  desproporção.
+- **publicar ao terminar** (ligado por padrão) reproduz o `.bat`: terminou com
+  `OK`, vai pro ar. `delete` publica com `--force`, porque remover páginas é
+  exatamente a desproporção que a guarda barra — e nesse caso foi pedida.
+
+> Antes, este painel fazia `git add . && git commit && git push`. Com o conteúdo
+> fora do git, isso dizia "publicado" e não mudava nada no site. `electron/git.ts`
+> foi removido.
 
 O `.ingest-status` tem **watcher próprio**: ele fica na raiz e começa com ponto,
 e o watcher da árvore ignora dotfiles e só olha `raw/` e `wiki/`. Além disso, o
 fim de cada comando força uma releitura — no OneDrive o evento de arquivo pode
 chegar tarde ou não chegar.
 
+### Duas contas diferentes
+
+| | O que é | Onde entra |
+|---|---|---|
+| **Claude Code** | sua conta Pro, que roda o ingest | terminal, `claude` → `/login` |
+| **Athena (Supabase)** | dono do conteúdo publicado | painel Publicar, ou `athena login` |
+
+Confundir as duas custa tempo: `OAuth session expired` é sempre a **primeira**.
+O app reconhece essa mensagem no meio do stream e abre um terminal já no
+comando certo, em vez de mostrar "falhou".
+
+O login do app é a **mesma sessão** do CLI: `electron/account.ts` lê e escreve o
+`<vault>/.athena/session.json` no formato de `scripts/lib/session.mjs`, com as
+credenciais do `athena-web/.env.local`. Entrar aqui é entrar lá. Em disco fica só
+o refresh token; a `SERVICE_ROLE` continua sem existir no projeto, então o app
+escreve como usuário normal e apanha do RLS igual a todo mundo.
+
+### Explorer (botão direito)
+
+Menu de contexto desenhado pelo app — como VS Code e Obsidian fazem — porque os
+itens dependem do estado do vault e do tema: nova nota, nova pasta, renomear
+(`F2`, com o nome pré-selecionado sem a extensão), copiar caminho, revelar no
+Explorer do Windows, abrir material no programa padrão e apagar.
+
+**Apagar vai para a lixeira do Windows**, não `unlink`: com o conteúdo fora do
+git, `raw/` é a única cópia local do seu texto. A confirmação é o modal do app
+(`Confirm.tsx`), não o `confirm()` do navegador — a janela nativa vinha com o
+título "athena-app", fonte do sistema e nenhum espaço para dizer o que
+acontece. Aqui cabe o caminho completo e a nota de que dá para restaurar. O foco
+nasce em **Cancelar** e `Esc` fecha: ação destrutiva não pode depender de
+`Enter` por reflexo. E o menu espelha as guardas do
+`vault.ts` — sobre `raw/INATEL/` ou `wiki/`, criar/renomear/apagar aparecem
+desabilitados em vez de falharem depois.
+
+### Visualizador de material
+
+PDF abre embutido (o Chromium do Electron já tem leitor). PPT abre no programa
+padrão do Windows: converter seria frágil e o PowerPoint mostra animação, fonte e
+layout como o professor montou.
+
+Os dois usam o esquema **`athena://file/<caminho>`**, registrado no main. Existe
+porque a janela roda em `http://localhost:5173` no dev, e o Chromium bloqueia
+`file://` vindo dessa origem. É o mesmo caminho que serve as imagens da nota.
+
+### Editor de nota (Tiptap)
+
+WYSIWYG por cima de markdown: `src/lib/markdown.ts` monta as extensões e
+serializa, `NoteEditor.tsx` é a tela, `Toolbar.tsx` são os comandos.
+
+**O arquivo no disco continua sendo `.md`** — o estado `body` é markdown
+serializado a cada tecla, nunca HTML. O botão `markdown` mostra exatamente o
+texto que será gravado (e aceita colar nota pronta de fora).
+
+Duas armadilhas resolvidas, ambas silenciosas se voltarem:
+
+- **A lista de extensões é um contrato de fidelidade.** O que não estiver nela é
+  achatado no salvamento, sem erro. Sem `TableKit`, a tabela de registradores
+  vira `BitNomeFuncao0INT0habilita...` numa linha só.
+- **O serializador escapa colchetes**, e `\[\[aula\]\]` não é wikilink para o
+  Obsidian nem para o site — o nó some do grafo. `unescapeWikilinks()` desfaz
+  esse escape específico.
+
+```cmd
+npm run test:md
+```
+
+Roda o ida-e-volta (markdown → editor → markdown) e falha se algo se perder:
+tabela, wikilink, tarefas, bloco de código com linguagem, e a estabilidade do
+formato no segundo ciclo (abrir e salvar sem editar não pode mexer no arquivo).
+Rode depois de mexer em qualquer extensão.
+
+Estilo: `.prose` em `src/index.css` é porte direto do
+`athena-web/src/app/globals.css` — mesmas medidas (Arial 1.188rem/1.8, h2 com
+régua, tabela com cabeçalho em surface), traduzidas dos triplets
+`rgb(var(--c-*))` do site para os tokens em hex daqui. A aba **Leitura** usa o
+mesmo pipeline com `editable: false`, então nota escrita e nota publicada têm a
+mesma cara. Mexeu num, mexa no outro.
+
+**Imagem colada** (Ctrl+V ou arrastar) vai para `raw/attachments/` com o nome da
+aula (`interrupcoes-externas-2.png`) e entra na nota como `![[arquivo.png]]` —
+o formato do CLAUDE.md §150 e o primeiro lugar onde o ingest procura. Base64
+dentro do `.md` seria mais fácil e quebraria o fluxo: o ingest precisa **abrir**
+a imagem para descrever o que ela ensina.
+
+Na tela essa imagem vira `athena://file/raw/attachments/...`; no disco volta a
+ser `![[...]]`. As duas conversões são inversas (`embedsParaSrc` /
+`srcParaEmbeds`) — mexeu numa, mexa na outra, e o `test:md` cobre o ciclo.
+
+**`[[link]]`** abre a lista de aulas que existem de verdade em `wiki/subjects/`.
+Digitar o slug de cabeça é como nasce link órfão: `[[interrupcoes]]` quando a
+página é `interrupcoes-externas` não aponta para lugar nenhum.
+
+**Botão direito no texto**: recortar/copiar/colar, negrito, itálico, código,
+link para aula e tabela.
+
+Ainda fora: nota de rodapé e HTML embutido. Para esses, use o modo `markdown` —
+o texto passa intacto.
+
 ## Decisões em aberto
 
-1. **Editor.** Hoje é um `<textarea>` de markdown. `src/components/NoteEditor.tsx`
-   tem o seam marcado para Tiptap ou CodeMirror 6. A nota crua **precisa** sair
-   como `.md`, senão o passo 1 do `CLAUDE.md` não a encontra. Escreva uma nota
-   real de E09 (com tabela de registradores e código AVR-C) antes de decidir.
-2. **Componentes de assinatura.** `Graph.tsx` e `BrainHologram.tsx` do
+1. **Componentes de assinatura.** `Graph.tsx` e `BrainHologram.tsx` do
    `athena-web` ainda não foram portados. O CSS já expõe `--sv-accent`,
    `--sv-bright`, `--sv-mid`, `--sv-deep` e `--sv-glow` nas 7 paletas, então
    eles funcionam ao serem copiados — só precisam ler o tema em runtime para
    trocar o blending (aditivo no escuro, normal no claro).
-3. **Publicação por execução vs em lote.** Hoje o `.ingest-status` reflete só o
+2. **Publicação por execução vs em lote.** Hoje o `.ingest-status` reflete só o
    último comando. Rodar três ingests e publicar uma vez significa que um
    `FAIL` no terceiro bloqueia os dois que deram certo.
-4. **`--permission-mode acceptEdits`** dá ao Claude Code liberdade para escrever
+3. **`--permission-mode acceptEdits`** dá ao Claude Code liberdade para escrever
    arquivos e rodar `npm run build` sem pedir aprovação a cada passo. É uma
    decisão de confiança, apropriada num vault local seu — revise se o app um dia
    apontar para um vault de terceiros.
