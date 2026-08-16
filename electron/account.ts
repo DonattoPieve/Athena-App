@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as path from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -35,7 +36,121 @@ if (typeof (globalThis as { WebSocket?: unknown }).WebSocket === "undefined") {
   };
 }
 
-export type Account = { name: string; email: string };
+export type Account = {
+  id: string;
+  name: string;
+  email: string;
+  /** URL publica do avatar, ou null. Vem de `profiles.avatar_url`. */
+  avatarUrl: string | null;
+  /**
+   * Entrou pelo cache porque a rede falhou. O vault e local: ficar trancado
+   * fora dele por falta de internet seria absurdo. Publish e pull ficam
+   * bloqueados — o resto funciona.
+   */
+  offline?: boolean;
+};
+
+/**
+ * Cache da ultima conta que entrou neste vault.
+ *
+ * Arquivo PROPRIO, nao dentro do session.json: aquele e compartilhado com o
+ * CLI do vault e tem formato combinado. Cache e coisa do app.
+ */
+const CONTA_REL = path.join(".athena", "app-conta.json");
+
+function guardarConta(vaultRoot: string, c: Account) {
+  try {
+    fs.mkdirSync(path.join(vaultRoot, ".athena"), { recursive: true });
+    fs.writeFileSync(
+      path.join(vaultRoot, CONTA_REL),
+      JSON.stringify({ id: c.id, name: c.name, email: c.email, avatarUrl: c.avatarUrl }, null, 2),
+      "utf8",
+    );
+  } catch {
+    // cache e conveniencia; falhar aqui nao pode derrubar um login que deu certo
+  }
+}
+
+function contaEmCache(vaultRoot: string): Account | null {
+  try {
+    const c = JSON.parse(fs.readFileSync(path.join(vaultRoot, CONTA_REL), "utf8"));
+    if (!c?.email) return null;
+    return { id: c.id ?? "", name: c.name ?? c.email, email: c.email, avatarUrl: c.avatarUrl ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A falha foi de REDE ou a sessao morreu de verdade?
+ *
+ * A diferenca decide entre "siga offline" e "entre de novo". Errar para o lado
+ * do offline com um token revogado seria pior: a pessoa acharia que esta
+ * logada e o publish quebraria depois.
+ */
+function ehFalhaDeRede(e: unknown): boolean {
+  const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  return (
+    m.includes("fetch failed") ||
+    m.includes("network") ||
+    m.includes("enotfound") ||
+    m.includes("econnrefused") ||
+    m.includes("etimedout") ||
+    m.includes("timeout") ||
+    m.includes("dns")
+  );
+}
+
+const BUCKET = "avatars";
+
+/**
+ * Cliente com a sessao do disco ja carregada.
+ *
+ * O `refreshSession` roda o token e devolve a sessao, mas nao a instala no
+ * cliente — sem o `setSession` o Storage sobe como anonimo e a policy recusa.
+ * Foi assim que o primeiro upload voltou "new row violates row-level security".
+ */
+export async function clienteAutenticado(vaultRoot: string) {
+  const file = sessionFile(vaultRoot);
+  if (!fs.existsSync(file)) throw new Error("Sem sessão nesta máquina.");
+  const { refresh_token } = JSON.parse(fs.readFileSync(file, "utf8"));
+
+  const supabase = makeClient(vaultRoot);
+  const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+  if (error || !data.session || !data.user) throw new Error("Sessão expirada. Entre de novo.");
+  saveSession(vaultRoot, data.session.refresh_token);
+  await supabase.auth.setSession(data.session);
+  return { supabase, user: data.user };
+}
+
+/** Le o avatar do perfil. Falha aqui nao pode derrubar o login. */
+async function avatarDe(supabase: SupabaseClient, id: string): Promise<string | null> {
+  try {
+    const { data } = await supabase.from("profiles").select("avatar_url").eq("id", id).maybeSingle();
+    return (data?.avatar_url as string) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Monta o Account a partir do usuario do Supabase, com o nome de vários lugares. */
+async function contaDe(
+  supabase: SupabaseClient,
+  u: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
+): Promise<Account> {
+  const m = u.user_metadata ?? {};
+  return {
+    id: u.id,
+    name:
+      (m.name as string) ??
+      (m.full_name as string) ??
+      (m.user_name as string) ??
+      u.email ??
+      "",
+    email: u.email ?? "",
+    avatarUrl: await avatarDe(supabase, u.id),
+  };
+}
 
 /**
  * O Supabase responde em ingles e em linguagem de API. Quem le e voce, no meio
@@ -54,6 +169,15 @@ function emPortugues(msg: string): string {
   }
   if (m.includes("fetch failed") || m.includes("network") || m.includes("enotfound")) {
     return "Não consegui falar com o Supabase. Verifique sua conexão e tente de novo.";
+  }
+  // Os dois tropecos de configuracao do OAuth. Sem traduzir, a tela mostra
+  // "Unsupported provider" e ninguem descobre que falta ligar um botao no
+  // painel do Supabase.
+  if (m.includes("provider is not enabled") || m.includes("unsupported provider")) {
+    return "Esse provedor ainda não está ligado no Supabase (Authentication → Providers).";
+  }
+  if (m.includes("redirect") && (m.includes("not allowed") || m.includes("invalid"))) {
+    return `O Supabase recusou o endereço de retorno. Adicione ${REDIRECT} em Authentication → URL Configuration → Redirect URLs.`;
   }
   return msg;
 }
@@ -124,6 +248,9 @@ function saveSession(vaultRoot: string, refreshToken: string) {
 export function logout(vaultRoot: string) {
   const file = sessionFile(vaultRoot);
   if (fs.existsSync(file)) fs.rmSync(file);
+  // Sem isto o modo offline ressuscitaria a conta de quem acabou de sair.
+  const cache = path.join(vaultRoot, CONTA_REL);
+  if (fs.existsSync(cache)) fs.rmSync(cache);
 }
 
 /**
@@ -143,14 +270,26 @@ export async function status(vaultRoot: string): Promise<Account | null> {
   if (!refresh_token) return null;
 
   const supabase = makeClient(vaultRoot);
-  const { data, error } = await supabase.auth.refreshSession({ refresh_token });
-  if (error || !data.session || !data.user) return null;
+
+  let data;
+  try {
+    const r = await supabase.auth.refreshSession({ refresh_token });
+    if (r.error) throw new Error(r.error.message);
+    data = r.data;
+  } catch (e) {
+    // Sem rede o vault continua no disco. Entrar pelo cache e o certo aqui;
+    // devolver null jogaria a pessoa numa tela de login que tambem precisa
+    // de rede — ou seja, porta trancada por fora.
+    const cache = ehFalhaDeRede(e) ? contaEmCache(vaultRoot) : null;
+    return cache ? { ...cache, offline: true } : null;
+  }
+  if (!data.session || !data.user) return null;
 
   saveSession(vaultRoot, data.session.refresh_token);
-  return {
-    name: (data.user.user_metadata?.name as string) ?? data.user.email ?? "",
-    email: data.user.email ?? "",
-  };
+  await supabase.auth.setSession(data.session);
+  const conta = await contaDe(supabase, data.user);
+  guardarConta(vaultRoot, conta);
+  return conta;
 }
 
 export async function signUp(
@@ -165,12 +304,10 @@ export async function signUp(
     .catch((e: Error) => ({ data: null, error: e as unknown as { message: string } }));
 
   if (error) throw new Error(emPortugues(error.message));
-  if (!data?.session) return null; // precisa confirmar o e-mail
+  if (!data?.session || !data.user) return null; // precisa confirmar o e-mail
   saveSession(vaultRoot, data.session.refresh_token);
-  return {
-    name: (data.user?.user_metadata?.name as string) ?? data.user?.email ?? "",
-    email: data.user?.email ?? "",
-  };
+  await supabase.auth.setSession(data.session);
+  return contaDe(supabase, data.user);
 }
 
 /**
@@ -205,6 +342,246 @@ export async function updateAccount(
   return { pendente };
 }
 
+/* ------------------------------------------------------------------ *
+ * Foto de perfil
+ * ------------------------------------------------------------------ */
+
+const TIPOS: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
+
+/** Mesmo teto do bucket. Checar aqui da erro em portugues em vez de HTTP 413. */
+const TETO = 2 * 1024 * 1024;
+
+/** `avatars/<uid>/arquivo` — as policies leem o uid da primeira pasta. */
+function caminhoDoObjeto(url: string): string | null {
+  const i = url.indexOf(`/${BUCKET}/`);
+  return i === -1 ? null : url.slice(i + BUCKET.length + 2).split("?")[0];
+}
+
+/**
+ * Sobe a foto e aponta `profiles.avatar_url` para ela.
+ *
+ * Nome unico a cada envio, e o anterior e apagado depois. Sobrescrever um nome
+ * fixo seria mais simples, mas a URL publica e cacheada pelo Chromium e pelo
+ * navegador do site: a pessoa trocaria a foto e continuaria vendo a antiga.
+ */
+export async function avatarUpload(vaultRoot: string, arquivo: string): Promise<Account> {
+  const ext = path.extname(arquivo).toLowerCase();
+  const contentType = TIPOS[ext];
+  if (!contentType) {
+    throw new Error("Formato não aceito. Use PNG, JPG, WEBP ou GIF.");
+  }
+  const bytes = fs.readFileSync(arquivo);
+  if (bytes.byteLength > TETO) {
+    throw new Error(
+      `A imagem tem ${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB e o limite é 2 MB.`,
+    );
+  }
+
+  const { supabase, user } = await clienteAutenticado(vaultRoot);
+  const anterior = await avatarDe(supabase, user.id);
+  const destino = `${user.id}/${Date.now()}${ext}`;
+
+  const up = await supabase.storage.from(BUCKET).upload(destino, bytes, { contentType });
+  if (up.error) throw new Error(emPortugues(up.error.message));
+
+  const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(destino);
+  const gravou = await supabase
+    .from("profiles")
+    .update({ avatar_url: pub.publicUrl })
+    .eq("id", user.id);
+  if (gravou.error) {
+    // Sem a linha em `profiles` a imagem virava lixo invisivel no bucket.
+    await supabase.storage.from(BUCKET).remove([destino]);
+    throw new Error(emPortugues(gravou.error.message));
+  }
+
+  const velho = anterior && caminhoDoObjeto(anterior);
+  if (velho && velho !== destino) {
+    // Falhar aqui e desperdicio de bytes, nao erro do usuario.
+    await supabase.storage.from(BUCKET).remove([velho]).catch(() => {});
+  }
+
+  return { ...(await contaDe(supabase, user)), avatarUrl: pub.publicUrl };
+}
+
+export async function avatarRemove(vaultRoot: string): Promise<Account> {
+  const { supabase, user } = await clienteAutenticado(vaultRoot);
+  const atual = await avatarDe(supabase, user.id);
+
+  const gravou = await supabase.from("profiles").update({ avatar_url: null }).eq("id", user.id);
+  if (gravou.error) throw new Error(emPortugues(gravou.error.message));
+
+  const alvo = atual && caminhoDoObjeto(atual);
+  if (alvo) await supabase.storage.from(BUCKET).remove([alvo]).catch(() => {});
+
+  return { ...(await contaDe(supabase, user)), avatarUrl: null };
+}
+
+/* ------------------------------------------------------------------ *
+ * Entrar com GitHub / Google
+ * ------------------------------------------------------------------ */
+
+export type Provedor = "github" | "google";
+
+/**
+ * Porta FIXA de proposito. O Supabase so redireciona para URLs que estao na
+ * allowlist do projeto (Authentication > URL Configuration > Redirect URLs), e
+ * porta sorteada obrigaria a cadastrar um curinga la. Uma porta fixa e uma
+ * linha na allowlist:
+ *
+ *   http://127.0.0.1:53682/callback
+ */
+const PORTA_OAUTH = 53682;
+const REDIRECT = `http://127.0.0.1:${PORTA_OAUTH}/callback`;
+const ESPERA_MS = 3 * 60 * 1000;
+
+/**
+ * O fluxo PKCE guarda o "code verifier" no storage do cliente entre abrir o
+ * navegador e trocar o codigo pela sessao. O Node nao tem localStorage — este
+ * Map faz o papel, e some junto com o login. Nao pode ser o mesmo cliente do
+ * login por senha: aquele nao persiste nada de proposito.
+ */
+function clienteOAuth(vaultRoot: string): SupabaseClient {
+  const { url, key } = readEnv(vaultRoot);
+  const mem = new Map<string, string>();
+  return createClient(url, key, {
+    auth: {
+      flowType: "pkce",
+      persistSession: true,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      storage: {
+        getItem: (k: string) => mem.get(k) ?? null,
+        setItem: (k: string, v: string) => void mem.set(k, v),
+        removeItem: (k: string) => void mem.delete(k),
+      },
+    },
+  });
+}
+
+function pagina(titulo: string, texto: string, cor: string) {
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Athena</title></head>
+<body style="margin:0;height:100vh;display:grid;place-items:center;background:#0A0A0C;
+color:#E8E6EE;font:15px/1.5 system-ui,Segoe UI,sans-serif">
+<div style="text-align:center;max-width:420px;padding:24px">
+<div style="font-size:34px;font-weight:600;color:${cor};margin-bottom:10px">${titulo}</div>
+<p style="color:#9A93AA;margin:0">${texto}</p></div></body></html>`;
+}
+
+/**
+ * Tentativa de OAuth em andamento.
+ *
+ * Fechar a aba do navegador nao avisa ninguem: sem isto o servidor local ficava
+ * de pe ate o timeout de 3 minutos, segurando a porta e a promessa. A proxima
+ * tentativa batia em EADDRINUSE e a tela ficava travada esperando um retorno
+ * que nunca vinha.
+ */
+let oauthEmAndamento: (() => void) | null = null;
+
+/** Desiste da tentativa atual, se houver. Idempotente de proposito. */
+export function oauthCancel(): boolean {
+  const cancelar = oauthEmAndamento;
+  oauthEmAndamento = null;
+  cancelar?.();
+  return true;
+}
+
+/**
+ * Abre o provedor no navegador do sistema e espera o retorno num servidor
+ * local. Fica no navegador, e nao numa janela do Electron, porque Google e
+ * GitHub recusam login dentro de webview embutida — e porque assim a pessoa
+ * ve a barra de endereco de verdade antes de digitar a senha.
+ */
+export async function oauthLogin(
+  vaultRoot: string,
+  provider: Provedor,
+  abrir: (url: string) => void,
+): Promise<Account> {
+  // Clicar em Google e depois em GitHub e comum; a porta e uma so.
+  oauthCancel();
+  const supabase = clienteOAuth(vaultRoot);
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: { redirectTo: REDIRECT, skipBrowserRedirect: true },
+  });
+  if (error || !data?.url) {
+    throw new Error(
+      emPortugues(error?.message ?? "Não consegui montar o endereço de login."),
+    );
+  }
+
+  const code = await new Promise<string>((resolve, reject) => {
+    const servidor = http.createServer((req, res) => {
+      const u = new URL(req.url ?? "/", REDIRECT);
+      if (u.pathname !== "/callback") {
+        res.writeHead(404).end();
+        return;
+      }
+      const codigo = u.searchParams.get("code");
+      const erro = u.searchParams.get("error_description") ?? u.searchParams.get("error");
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(
+        codigo
+          ? pagina("Pronto", "Pode fechar esta aba e voltar para o Athena.", "#8B5CF6")
+          : pagina("Não deu", erro ?? "O provedor não devolveu um código.", "#e24b4a"),
+      );
+      fechar();
+      codigo ? resolve(codigo) : reject(new Error(erro ?? "Login cancelado."));
+    });
+
+    const relogio = setTimeout(() => {
+      fechar();
+      reject(new Error("O login demorou demais. Tente de novo."));
+    }, ESPERA_MS);
+
+    function fechar() {
+      clearTimeout(relogio);
+      oauthEmAndamento = null;
+      servidor.close();
+      // Conexao keep-alive do navegador segura o close(); sem isto a porta
+      // continua ocupada depois de cancelar.
+      servidor.closeAllConnections?.();
+    }
+
+    // Quem desiste e a tela, quando a pessoa volta para o campo de e-mail.
+    oauthEmAndamento = () => {
+      fechar();
+      reject(new Error("Login por provedor cancelado."));
+    };
+
+    servidor.on("error", (e: NodeJS.ErrnoException) => {
+      fechar();
+      reject(
+        new Error(
+          e.code === "EADDRINUSE"
+            ? `A porta ${PORTA_OAUTH} está ocupada. Feche a outra tentativa de login e repita.`
+            : e.message,
+        ),
+      );
+    });
+
+    servidor.listen(PORTA_OAUTH, "127.0.0.1", () => abrir(data.url));
+  });
+
+  const troca = await supabase.auth.exchangeCodeForSession(code);
+  if (troca.error || !troca.data.session || !troca.data.user) {
+    throw new Error(emPortugues(troca.error?.message ?? "Não consegui concluir o login."));
+  }
+  saveSession(vaultRoot, troca.data.session.refresh_token);
+  await supabase.auth.setSession(troca.data.session);
+  const conta = await contaDe(supabase, troca.data.user);
+  guardarConta(vaultRoot, conta);
+  return conta;
+}
+
 export async function login(
   vaultRoot: string,
   email: string,
@@ -221,8 +598,6 @@ export async function login(
     throw new Error(emPortugues(error?.message ?? "Não consegui entrar."));
   }
   saveSession(vaultRoot, data.session.refresh_token);
-  return {
-    name: (data.user.user_metadata?.name as string) ?? data.user.email ?? "",
-    email: data.user.email ?? "",
-  };
+  await supabase.auth.setSession(data.session);
+  return contaDe(supabase, data.user);
 }

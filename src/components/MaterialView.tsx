@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, mensagemDeErro } from "../lib/api";
+import { t } from "../lib/i18n";
 
 /**
  * Visualizador do material oficial.
@@ -21,23 +22,18 @@ export function MaterialView({ rel }: { rel: string }) {
   const url = `athena://file/${rel.split("/").map(encodeURIComponent).join("/")}`;
 
   /**
-   * PPT abre sozinho no PowerPoint ao abrir a aba. Uma tela dizendo "clique
-   * para abrir" e um clique a mais para chegar no mesmo lugar — o PDF ja abre
-   * direto, e o PPT tem que se comportar igual.
+   * PPT NAO abre sozinho.
    *
-   * O ref evita reabrir quando o React remonta (StrictMode, troca de aba):
-   * duas janelas do PowerPoint do mesmo arquivo e pior que nenhuma.
+   * Antes abria ao montar a aba, para poupar um clique. Na pratica isso faz o
+   * PowerPoint pular na frente de tudo sempre que a aba e tocada — inclusive
+   * ao voltar para ela sem querer, ou ao clicar no material a partir da tela
+   * de leitura so para ver de qual arquivo a pagina saiu. Abrir programa
+   * externo e acao, e acao espera o botao.
    */
-  const jaAbriu = useRef<string | null>(null);
   useEffect(() => {
-    if (ext === "pdf" || jaAbriu.current === rel) return;
-    jaAbriu.current = rel;
+    setAberto(false);
     setErro(null);
-    api.fs
-      .openExternal(rel)
-      .then(() => setAberto(true))
-      .catch((e) => setErro(mensagemDeErro(e)));
-  }, [rel, ext]);
+  }, [rel]);
 
   async function abrirFora() {
     setErro(null);
@@ -51,18 +47,18 @@ export function MaterialView({ rel }: { rel: string }) {
   return (
     <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12, flex: 1, minHeight: 0 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span className="label">Material</span>
+        <span className="label">{t("Material")}</span>
         <code style={{ color: "var(--c-accent)", fontSize: 12 }}>{nome}</code>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
           <button className="btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={abrirFora}>
-            Abrir no programa padrão
+            {t("Abrir no programa padrão")}
           </button>
           <button
             className="btn"
             style={{ padding: "4px 10px", fontSize: 11 }}
             onClick={() => api.fs.reveal(rel)}
           >
-            Revelar no Explorer
+            {t("Revelar no Explorer")}
           </button>
         </div>
       </div>
@@ -78,14 +74,15 @@ export function MaterialView({ rel }: { rel: string }) {
         >
           <div>
             <p style={{ margin: "0 0 6px", fontWeight: 500 }}>
-              {aberto ? "Aberto no programa padrão" : `Abrindo ${nome}…`}
+              {aberto ? t("Aberto no programa padrão") : nome}
             </p>
             <p style={{ margin: "0 0 16px", color: "var(--c-muted)", fontSize: 12, maxWidth: 420 }}>
-              O leitor embutido só renderiza PDF, então este arquivo foi para o programa padrão do
-              Windows — que mostra fonte, layout e animação como o professor montou.
+              {t(
+                "O leitor embutido só renderiza PDF. Este arquivo abre no programa padrão do Windows, que mostra fonte, layout e animação como o professor montou — mas só quando você pedir: nada abre sozinho ao entrar nesta aba."
+              )}
             </p>
-            <button className="btn" onClick={abrirFora}>
-              Abrir de novo
+            <button className="btn btn-primary" onClick={abrirFora}>
+              {aberto ? t("Abrir de novo") : t("Abrir no programa padrão")}
             </button>
           </div>
         </div>

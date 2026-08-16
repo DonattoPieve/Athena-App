@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type HomeData } from "../lib/api";
+import { t, tf } from "../lib/i18n";
 
 /**
  * Home — mesma linguagem visual do athena-web (hero com brilho radial, cartões
@@ -27,7 +28,7 @@ export function Home({
 
   const saudacao = useMemo(() => {
     const h = new Date().getHours();
-    return h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+    return h < 12 ? t("Bom dia") : h < 18 ? t("Boa tarde") : t("Boa noite");
   }, []);
 
   const resultados = useMemo(() => {
@@ -41,7 +42,7 @@ export function Home({
   if (!dados) {
     return (
       <div className="card" style={{ padding: 24 }}>
-        <p style={{ margin: 0, color: "var(--c-muted)" }}>Lendo o vault…</p>
+        <p style={{ margin: 0, color: "var(--c-muted)" }}>{t("Lendo o vault…")}</p>
       </div>
     );
   }
@@ -55,12 +56,14 @@ export function Home({
       {dados.logConflitado && (
         <div className="card" style={{ padding: 14, borderColor: "#ba7517" }}>
           <strong style={{ color: "#ba7517", fontSize: 13 }}>
-            log.md tem marcadores de conflito de merge
+            {t("log.md tem marcadores de conflito de merge")}
           </strong>
           <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--c-muted)" }}>
-            O publish manda o log inteiro para a tabela <code>ingests</code>. Com{" "}
-            <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code> no meio, o histórico vai torto. Resolva o
-            arquivo antes de publicar.
+            {t("O publish manda o log inteiro para a tabela ")}
+            <code>ingests</code>
+            {t(". Com ")}
+            <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>
+            {t(" no meio, o histórico vai torto. Resolva o arquivo antes de publicar.")}
           </p>
         </div>
       )}
@@ -71,18 +74,23 @@ export function Home({
         <div className="hero-conteudo">
           <p style={{ margin: 0, fontSize: 12, color: "var(--c-muted)" }}>{saudacao}</p>
           <h1 className="hero-titulo">
-            Seu <span style={{ color: "var(--c-accent)" }}>Segundo</span> Cérebro
+            {t("Seu ")}
+            <span style={{ color: "var(--c-accent)" }}>{t("Segundo")}</span>
+            {t(" Cérebro")}
           </h1>
           <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--c-muted)" }}>
-            {dados.subjects.length} matéria(s), {dados.paginas.length} página(s) e {dados.notas}{" "}
-            nota(s) neste disco.
+            {tf("{subjects} matéria(s), {paginas} página(s) e {notas} nota(s) neste disco.", {
+              subjects: dados.subjects.length,
+              paginas: dados.paginas.length,
+              notas: dados.notas,
+            })}
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="btn btn-primary" onClick={onNovaNota}>
-              Nova nota
+              {t("Nova nota")}
             </button>
             <button className="btn" onClick={onComandos}>
-              Comandos
+              {t("Comandos")}
             </button>
           </div>
         </div>
@@ -92,7 +100,7 @@ export function Home({
       <div style={{ position: "relative" }}>
         <input
           className="field"
-          placeholder="Buscar aula pelo título, slug ou matéria…"
+          placeholder={t("Buscar aula pelo título, slug ou matéria…")}
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           onKeyDown={(e) => {
@@ -128,33 +136,29 @@ export function Home({
       <div className="stats">
         <Stat
           n={dados.paginas.length}
-          rotulo="Páginas"
-          sub={semana ? `+${semana} nesta semana` : ""}
+          rotulo={t("Páginas")}
+          sub={semana ? tf("+{n} nesta semana", { n: semana }) : ""}
           serie={serieAcumulada(dados)}
         />
         <Stat
           n={dados.subjects.length}
-          rotulo="Matérias"
-          sub={`${dados.notas} nota(s) crua(s)`}
+          rotulo={t("Matérias")}
+          sub={tf("{n} nota(s) crua(s)", { n: dados.notas })}
           serie={dados.subjects.map((s) => s.paginas)}
         />
-        <Stat
-          n={ingests}
-          rotulo="Ingests no log"
-          sub={dados.eventos[0]?.data ?? ""}
-          serie={porDia(dados)}
-          barras
-        />
+        <Stat n={ingests} rotulo={t("Ingests no log")} sub={dados.eventos[0]?.data ?? ""} serie={porDia(dados)} barras />
       </div>
 
       {/* ---- matérias ---- */}
       <div className="card" style={{ padding: 16 }}>
         <p className="label" style={{ margin: "0 0 10px" }}>
-          Matérias
+          {t("Matérias")}
         </p>
         {dados.subjects.length === 0 ? (
           <p style={{ margin: 0, fontSize: 12, color: "var(--c-muted)" }}>
-            Nada em <code>wiki/subjects</code> ainda.
+            {t("Nada em ")}
+            <code>wiki/subjects</code>
+            {t(" ainda.")}
           </p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -163,7 +167,7 @@ export function Home({
                 key={s.slug}
                 className="materia"
                 onClick={() => onAbrir(`${s.rel}/${s.slug}.md`)}
-                title={`Abrir o MOC de ${s.slug}`}
+                title={tf("Abrir o MOC de {slug}", { slug: s.slug })}
               >
                 <span className="materia-code">{s.code}</span>
                 <span className="materia-nome">{s.nome}</span>
@@ -181,7 +185,7 @@ export function Home({
       <div className="duas-colunas">
         <div className="card" style={{ padding: 16 }}>
           <p className="label" style={{ margin: "0 0 10px" }}>
-            Atualizadas por último
+            {t("Atualizadas por último")}
           </p>
           {dados.paginas.slice(0, 6).map((p) => (
             <button key={p.rel} className="nav-item" onClick={() => onAbrir(p.rel)}>
@@ -197,10 +201,10 @@ export function Home({
 
         <div className="card" style={{ padding: 16 }}>
           <p className="label" style={{ margin: "0 0 10px" }}>
-            Histórico (log.md)
+            {t("Histórico (log.md)")}
           </p>
           {dados.eventos.length === 0 ? (
-            <p style={{ margin: 0, fontSize: 12, color: "var(--c-muted)" }}>Sem eventos ainda.</p>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--c-muted)" }}>{t("Sem eventos ainda.")}</p>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {dados.eventos.slice(0, 6).map((e, i) => (
@@ -284,9 +288,7 @@ function Sparkline({ dados, barras }: { dados: number[]; barras?: boolean }) {
     (i / Math.max(1, serie.length - 1)) * w,
     h - (v / max) * (h - 3) - 1,
   ]);
-  const linha = pts
-    .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`)
-    .join(" ");
+  const linha = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
   const area = `${linha} L ${w} ${h} L 0 ${h} Z`;
   const ultimo = pts[pts.length - 1];
   return (
@@ -314,11 +316,11 @@ function diasAte(iso: string): number {
 function quando(iso: string): string {
   const dias = diasAte(iso);
   if (!isFinite(dias)) return "";
-  if (dias < 1) return "hoje";
-  if (dias < 2) return "ontem";
-  if (dias < 30) return `${Math.floor(dias)} dias`;
+  if (dias < 1) return t("hoje");
+  if (dias < 2) return t("ontem");
+  if (dias < 30) return tf("{n} dias", { n: Math.floor(dias) });
   const meses = Math.floor(dias / 30);
-  return meses === 1 ? "1 mês" : `${meses} meses`;
+  return meses === 1 ? t("1 mês") : tf("{n} meses", { n: meses });
 }
 
 /** Páginas acumuladas por semana — a curva sobe conforme o vault cresce. */

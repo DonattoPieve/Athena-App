@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, mensagemDeErro } from "../lib/api";
+import { api, mensagemDeErro, type ClaudeConta } from "../lib/api";
+import { t, idioma, trocarIdioma } from "../lib/i18n";
 
 const PALETAS = ["purple", "cyan", "blue", "matrix", "amber", "pink", "red"] as const;
 
@@ -25,6 +26,8 @@ export function Settings({
   const [claudeBin, setClaudeBin] = useState("");
   const [autoPull, setAutoPull] = useState(true);
   const [autoPublish, setAutoPublish] = useState(true);
+  /** null = ainda lendo o arquivo do Claude Code. */
+  const [claude, setClaude] = useState<ClaudeConta | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState<string | null>(null);
 
@@ -42,6 +45,10 @@ export function Settings({
     api.vault.get().then((v) => setClaudeBin(v.claudeBin));
     api.publish.autoPull().then(setAutoPull).catch(() => {});
     api.publish.autoPublish().then(setAutoPublish).catch(() => {});
+    api.claude
+      .whoami()
+      .then(setClaude)
+      .catch(() => setClaude({ email: null, org: null, arquivo: "", existe: false }));
   }, []);
 
   async function guardar(fn: () => Promise<unknown>, oque: string) {
@@ -57,17 +64,28 @@ export function Settings({
 
   return (
     <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 18 }}>
-      <span className="label">Configurações</span>
+      <span className="label">{t("Configurações")}</span>
 
       {/* ---- aparência ---- */}
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <strong style={{ fontSize: 13 }}>Aparência</strong>
+        <strong style={{ fontSize: 13 }}>{t("Aparência")}</strong>
         <div style={{ display: "flex", gap: 6 }}>
           <button className="btn" data-active={tema === "dark"} onClick={() => setTema("dark")}>
-            escuro
+            {t("escuro")}
           </button>
           <button className="btn" data-active={tema === "light"} onClick={() => setTema("light")}>
-            claro
+            {t("claro")}
+          </button>
+          <button
+            className="btn"
+            style={{ marginLeft: "auto" }}
+            title={t("Volta os ícones da barra lateral para a ordem original")}
+            onClick={() => {
+              localStorage.removeItem("athena-rail");
+              window.location.reload();
+            }}
+          >
+            {t("Restaurar ordem dos ícones")}
           </button>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -91,6 +109,51 @@ export function Settings({
         </div>
       </section>
 
+      {/* ---- idioma ---- */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <strong style={{ fontSize: 13 }}>{t("Idioma")}</strong>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="btn" data-active={idioma() === "pt"} onClick={() => trocarIdioma("pt")}>
+            PT
+          </button>
+          <button className="btn" data-active={idioma() === "en"} onClick={() => trocarIdioma("en")}>
+            EN
+          </button>
+        </div>
+        <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>
+          {t("Trocar de idioma recarrega a janela.")}
+        </p>
+      </section>
+
+      {/* ---- atalhos ----
+          Aqui, e nao numa ajuda escondida: atalho que a pessoa nao descobre
+          e o mesmo que atalho que nao existe. */}
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <strong style={{ fontSize: 13 }}>{t("Atalhos")}</strong>
+        <div className="atalhos">
+          {[
+            ["Ctrl", "P", t("abrir uma página da wiki")],
+            ["Ctrl", "W", t("fechar a aba (não dispara enquanto você digita)")],
+            ["Ctrl+Shift", "P", t("ir para os Comandos")],
+            ["Esc", "", t("fechar o que estiver aberto por cima")],
+          ].map(([mod, tecla, oque]) => (
+            <div key={oque} className="atalho">
+              <span>
+                <kbd>{mod}</kbd>
+                {tecla && (
+                  <>
+                    {" + "}
+                    <kbd>{tecla}</kbd>
+                  </>
+                )}
+              </span>
+              <span style={{ color: "var(--c-muted)" }}>{oque}</span>
+            </div>
+          ))}
+        </div>
+
+      </section>
+
       {/* ---- vault ---- */}
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <strong style={{ fontSize: 13 }}>Vault</strong>
@@ -100,19 +163,16 @@ export function Settings({
         <div>
           <button
             className="btn"
+            title={t("A conta vem de dentro do vault — trocar de pasta pode trocar de conta")}
             onClick={() => guardar(async () => {
               await api.vault.pick();
               onTrocouVault();
-            }, "vault trocado")}
+            }, t("vault trocado"))}
           >
-            Trocar pasta do vault
+            {t("Trocar pasta do vault")}
           </button>
         </div>
-        <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>
-          A conta e as credenciais do Supabase vêm de dentro do vault
-          (<code>athena-web/.env.local</code> e <code>.athena/session.json</code>) — trocar de vault
-          pode trocar de conta.
-        </p>
+
       </section>
 
       {/* ---- claude code ---- */}
@@ -123,24 +183,67 @@ export function Settings({
             className="field"
             value={claudeBin}
             placeholder="claude"
+            title={t("Se o ingest não iniciar: rode where.exe claude e cole o caminho completo")}
             onChange={(e) => setClaudeBin(e.target.value)}
           />
           <button
             className="btn"
-            onClick={() => guardar(() => api.config.setClaudeBin(claudeBin.trim() || "claude"), "caminho salvo")}
+            onClick={() => guardar(() => api.config.setClaudeBin(claudeBin.trim() || "claude"), t("caminho salvo"))}
           >
-            Salvar
+            {t("Salvar")}
           </button>
         </div>
+
+        {/* Quem esta logado no Claude Code — e de quem sao os creditos que o
+            ingest gasta. Sem esta linha so dava para descobrir digitando
+            /status num terminal. */}
+        <div className="quem-claude">
+          <span className="label" style={{ margin: 0 }}>
+            {t("Conta em uso")}
+          </span>
+          {claude === null ? (
+            <span style={{ fontSize: 12, color: "var(--c-muted)" }}>{t("verificando…")}</span>
+          ) : claude.email ? (
+            <>
+              <strong style={{ fontSize: 12.5 }}>{claude.email}</strong>
+              {claude.org && (
+                <span style={{ fontSize: 11.5, color: "var(--c-muted)" }}>· {claude.org}</span>
+              )}
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: "#ba7517" }}>
+              {claude.existe
+                ? t("não reconheci a conta neste arquivo")
+                : t("nenhum login do Claude Code nesta máquina")}
+            </span>
+          )}
+          <button
+            className="btn"
+            style={{ marginLeft: "auto", padding: "3px 10px", fontSize: 11 }}
+            onClick={() => api.claude.whoami().then(setClaude)}
+          >
+            {t("Reler")}
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn" onClick={() => api.claude.openLogin()}>
+            {claude?.email ? t("Trocar de conta do Claude") : t("Entrar no Claude Code")}
+          </button>
+        </div>
+        {claude && !claude.email && (
+          <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>
+            {t("Li")} <code>{claude.arquivo}</code>. {t("Para a resposta oficial, abra o Claude Code e digite")}{" "}
+            <code>/status</code> — {t("este arquivo é dele, e o formato pode mudar sem aviso.")}
+          </p>
+        )}
         <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>
-          No Windows o executável é <code>claude.cmd</code> e o PATH do app não é o do terminal. Se
-          o ingest não iniciar, rode <code>where.exe claude</code> e cole o caminho completo aqui.
+          {t("A conta do Claude Code é do computador, não do Athena.")}
         </p>
       </section>
 
       {/* ---- automações ---- */}
       <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <strong style={{ fontSize: 13 }}>Automações</strong>
+        <strong style={{ fontSize: 13 }}>{t("Automações")}</strong>
         <label className="opcao">
           <input
             type="checkbox"
@@ -150,7 +253,7 @@ export function Settings({
               api.publish.autoPull(e.target.checked);
             }}
           />
-          puxar do banco ao abrir o app
+          {t("puxar do banco ao abrir o app")}
         </label>
         <label className="opcao">
           <input
@@ -161,7 +264,7 @@ export function Settings({
               api.publish.autoPublish(e.target.checked);
             }}
           />
-          publicar quando o comando terminar com OK
+          {t("publicar quando o comando terminar com OK")}
         </label>
       </section>
 

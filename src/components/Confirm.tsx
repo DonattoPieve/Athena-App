@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { t } from "../lib/i18n";
 
 /**
  * Confirmação do app, no lugar do `confirm()` do navegador.
@@ -67,7 +69,10 @@ function ConfirmDialog({
     return () => window.removeEventListener("keydown", onKey);
   }, [onFechar]);
 
-  return (
+  // Portal: o Confirm e chamado de dentro da arvore, do editor e da leitura —
+  // lugares com contexto de empilhamento proprio. No <body> ele nunca fica
+  // atras de nada.
+  return createPortal(
     <div className="modal-backdrop" onClick={() => onFechar(false)}>
       <div
         className="card modal"
@@ -98,16 +103,17 @@ function ConfirmDialog({
 
         <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
           <button ref={cancelar} className="btn" onClick={() => onFechar(false)}>
-            Cancelar
+            {t("Cancelar")}
           </button>
           <button
             className={pedido.perigo === false ? "btn btn-primary" : "btn btn-danger-solid"}
             onClick={() => onFechar(true)}
           >
-            {pedido.confirmar ?? "Confirmar"}
+            {pedido.confirmar ?? t("Confirmar")}
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

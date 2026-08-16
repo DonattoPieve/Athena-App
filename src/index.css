@@ -1041,3 +1041,644 @@ pre.term {
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+/* ---------------------------------------------------------------- *
+ * Rail arrastavel, identidade da conta e login
+ * ---------------------------------------------------------------- */
+
+/* O botao arrastado fica translucido; o cursor de "grab" so aparece no hover
+   para nao competir com o clique normal, que continua sendo a acao principal. */
+.rail-btn[draggable="true"]:active {
+  cursor: grabbing;
+}
+.rail-btn[data-arrastando="true"] {
+  opacity: 0.35;
+}
+
+/* Quem esta logado, no alto da lateral. */
+.quem-sou {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 5px 6px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 140ms, color 140ms;
+}
+.quem-sou:hover {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.quem-sou .bolinha {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.quem-sou-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Aviso de vault com dono anterior. Ambar, nao vermelho: nada quebrou ainda —
+   o estrago so acontece se a pessoa publicar sem perceber. */
+.alerta-conta {
+  padding: 14px 16px;
+  border-color: #b8860020;
+  background:
+    linear-gradient(0deg, color-mix(in srgb, #f0a020 8%, transparent), transparent),
+    var(--c-surface);
+  box-shadow: inset 3px 0 0 #d9901f;
+}
+.alerta-conta strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+.alerta-conta p {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--c-muted);
+  line-height: 1.5;
+}
+
+/* Botoes de provedor: icone + nome, dividindo a largura em duas. */
+.provedor {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Separador "ou com e-mail" — a risca some atras do texto. */
+.ou {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 14px;
+  color: var(--c-muted);
+  font-size: 11px;
+}
+.ou::before,
+.ou::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--c-border);
+}
+
+/* O olho fica DENTRO do campo, entao o input precisa de espaco a direita. */
+.campo-senha {
+  position: relative;
+  display: flex;
+}
+.campo-senha .field {
+  flex: 1;
+  padding-right: 36px;
+}
+.olho {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  border: none;
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+}
+.olho:hover {
+  color: var(--c-text);
+}
+
+.conferir {
+  margin: -2px 0 0;
+  font-size: 11.5px;
+  color: #ba7517;
+}
+
+/* Linha "quem esta logado no Claude Code" nas Configuracoes. */
+.quem-claude {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-bg);
+}
+
+/* ---------------------------------------------------------------- *
+ * Barra de progresso do ingest
+ * ---------------------------------------------------------------- */
+.barra {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--c-border);
+  overflow: hidden;
+}
+.barra-cheio {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--c-accent), color-mix(in srgb, var(--c-accent) 55%, #fff));
+  /* A largura anda em degraus (um marco por vez); a transicao e o que faz o
+     salto parecer movimento em vez de teleporte. */
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+/* Sem marcos para medir: listra andando, sem numero. */
+.barra-indeterminada {
+  width: 34%;
+  animation: barra-vai 1.4s ease-in-out infinite;
+}
+@keyframes barra-vai {
+  0% { margin-left: -34%; }
+  100% { margin-left: 100%; }
+}
+/* Parado esperando resposta: a barra nao pode continuar sugerindo trabalho. */
+.barra[data-parado="true"] .barra-cheio {
+  background: #ba7517;
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .barra-cheio { transition: none; }
+  .barra-indeterminada { animation: none; width: 100%; opacity: 0.4; }
+}
+
+/* Xadrez atras da imagem: sem ele, PNG transparente sobre fundo escuro parece
+   recortado errado — nao da pra saber onde acaba o desenho. */
+.img-fundo {
+  --q: color-mix(in srgb, var(--c-border) 55%, transparent);
+  background-image:
+    linear-gradient(45deg, var(--q) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--q) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--q) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--q) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+/* Avatar da conta: foto ou inicial, mesmo tamanho e mesmo recorte. */
+.avatar {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  object-fit: cover;
+  background: var(--c-accent-light);
+}
+span.avatar {
+  display: grid;
+  place-items: center;
+  color: var(--c-accent);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- *
+ * Modo leitura — mesmo desenho do athena-web
+ * ---------------------------------------------------------------- */
+/* Centralizada: em monitor largo o texto colado na esquerda deixa meia tela
+   vazia à direita e a linha de leitura fica longe do olho. O bloco inteiro
+   (texto + lateral) vai para o meio. */
+.leitura {
+  display: flex;
+  gap: 32px;
+  align-items: flex-start;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+.leitura-texto {
+  flex: 1;
+  min-width: 0;
+  max-width: 78ch; /* linha longa demais cansa; o site usa a mesma ordem */
+}
+.leitura-titulo {
+  margin: 0 0 2px;
+  font-size: 1.7rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.leitura-data {
+  margin: 0 0 22px;
+  font-size: 11.5px;
+  color: var(--c-muted);
+}
+
+/* Abaixo de 1100px a lateral roubaria a largura do texto — some. */
+.leitura-lado {
+  width: 232px;
+  flex: 0 0 auto;
+}
+@media (max-width: 1100px) {
+  .leitura-lado { display: none; }
+}
+.leitura-sticky {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.leitura-rotulo {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+
+.leitura-material {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  padding: 10px;
+  text-align: left;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 140ms, background-color 140ms;
+}
+button.leitura-material:hover {
+  border-color: color-mix(in srgb, var(--c-accent) 50%, transparent);
+  background: var(--c-accent-light);
+}
+.leitura-material-nome {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.leitura-material-acao {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+.leitura-indice {
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--c-border);
+}
+.leitura-indice a {
+  padding: 3px 0 3px 12px;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  font-size: 12.5px;
+  color: var(--c-muted);
+  text-decoration: none;
+  transition: color 140ms, border-color 140ms;
+}
+.leitura-indice a[data-nivel="3"] {
+  padding-left: 24px;
+  font-size: 12px;
+}
+.leitura-indice a:hover {
+  color: var(--c-accent);
+  border-left-color: var(--c-accent);
+}
+
+.leitura-irmas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.leitura-irmas button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.leitura-irmas button:hover { color: var(--c-accent); }
+.truncar {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- *
+ * Monitor serial da sessão
+ * ---------------------------------------------------------------- */
+
+/* A lupa da sessão, na ponta direita da barra de abas — o lugar do Serial
+   Monitor no Arduino. O ponto colorido é o que sobrou do painel: sem ele o
+   botão não diria nada sobre o que está acontecendo. */
+.lupa-sessao {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 24px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: color 140ms, background-color 140ms, border-color 140ms;
+}
+.lupa-sessao:hover {
+  color: var(--c-text);
+  background: var(--c-surface);
+}
+.lupa-ponto {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  border: 1.5px solid var(--c-bg);
+}
+/* Executando e "aguardando você" pulsam: parado exige atenção, ocioso não. */
+.lupa-sessao[data-estado="running"] .lupa-ponto,
+.lupa-sessao[data-estado="awaiting"] .lupa-ponto {
+  animation: lupa-pulso 1.5s ease-in-out infinite;
+}
+.lupa-sessao[data-estado="awaiting"] {
+  border-color: #ba7517;
+  color: #ba7517;
+}
+@keyframes lupa-pulso {
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lupa-sessao .lupa-ponto { animation: none; }
+}
+/* Fila: quantos comandos esperam a vez. */
+.lupa-fila {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 9px;
+  line-height: 13px;
+  text-align: center;
+}
+
+.aviso-claude {
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid #ba7517;
+  border-radius: var(--r-xl);
+  background: var(--c-surface);
+}
+
+/* A janela da lupa é grande de propósito — é o motivo de ela existir. */
+.serial-modal {
+  width: min(1000px, 100%);
+  height: min(76vh, 760px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* Limpar fica embaixo do log, alinhado a esquerda: e uma acao sobre o que esta
+   acima dele, nao sobre a janela. Fechar continua no topo. */
+.serial-rodape {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* ---------------------------------------------------------------- *
+ * Barra de título do app (a janela é frame: false)
+ *
+ * A faixa inteira arrasta a janela; qualquer coisa clicável dentro dela
+ * precisa de `no-drag`, senão o clique vira arrasto e o botão nunca dispara.
+ * ---------------------------------------------------------------- */
+.titlebar {
+  -webkit-app-region: drag;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding-left: 11px;
+  background: var(--c-bg);
+  border-bottom: 1px solid var(--c-border);
+  user-select: none;
+}
+.titlebar-marca { display: flex; color: var(--c-accent); }
+.titlebar-nome {
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--c-muted);
+}
+/* O X é o único botão: sem minimizar, sem maximizar. Maximizar é o duplo
+   clique na faixa; minimizar continua no atalho do sistema. */
+.titlebar-x {
+  -webkit-app-region: no-drag;
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: background-color 120ms, color 120ms;
+}
+.titlebar-x:hover { background: #c0392b; color: #fff; }
+
+/* ---------------------------------------------------------------- *
+ * Glossário
+ * ---------------------------------------------------------------- */
+.vazio {
+  padding: 26px;
+  text-align: center;
+  border-style: dashed;
+}
+
+.lista-cartoes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.glossario-letras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+.glossario-letras button {
+  padding: 1px 6px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm, 6px);
+  background: none;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.glossario-letras button:hover { color: var(--c-accent); border-color: var(--c-accent); }
+
+.termo { padding: 12px 14px; scroll-margin-top: 12px; }
+.termo-linha {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.termo-linha strong { font-size: 13px; color: var(--c-accent); }
+.termo-ref {
+  padding: 1px 6px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm, 6px);
+  background: none;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.termo-ref:hover { color: var(--c-accent); border-color: var(--c-accent); }
+.termo-contexto {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--c-muted);
+}
+
+/* ---------------------------------------------------------------- *
+ * Responsivo
+ *
+ * O app é uma janela redimensionável, não uma página de largura fixa: a
+ * pessoa encosta na lateral do monitor e o layout tem que continuar de pé.
+ * Os cortes abaixo são por LARGURA DA JANELA, não do dispositivo.
+ * ---------------------------------------------------------------- */
+
+/* A barra de abas cresce sem limite (uma aba por arquivo aberto). Sem isto
+   ela empurra a lupa para fora da janela — foi o que aconteceu com 8 abas. */
+.tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.tabs::-webkit-scrollbar { height: 6px; }
+.tab { flex: 0 0 auto; }
+/* A lupa não rola junto: ela é o aviso de que o Claude parou para perguntar. */
+.tabs > div:last-child { position: sticky; right: 0; background: var(--c-bg); }
+
+/* Janela estreita: a lateral do explorer come a tela do conteúdo. */
+@media (max-width: 820px) {
+  .leitura-texto { max-width: none; }
+  .modal { width: 100%; }
+  .serial-modal, .seletor { height: min(88vh, 900px); }
+}
+
+/* Tela baixa (notebook 768p com barra de tarefas): o modal não pode passar
+   da altura útil, senão o botão de fechar sai da janela. */
+@media (max-height: 700px) {
+  .serial-modal, .seletor { height: 86vh; }
+  .modal-backdrop { padding: 12px; }
+}
+
+/* Seletor de página do "Regerar". */
+.seletor {
+  width: min(560px, 100%);
+  height: min(62vh, 560px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.seletor-lista {
+  flex: 1;
+  min-height: 0;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.seletor-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: none;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.seletor-item[data-marcado="true"] {
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+}
+.seletor-vazio {
+  margin: 14px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+
+/* Resultado de busca DENTRO do arquivo: duas linhas, a segunda é o trecho. */
+.busca-conteudo {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  height: auto;
+  padding: 6px 10px;
+}
+.busca-trecho {
+  width: 100%;
+  font-size: 11px;
+  color: var(--c-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Lista de atalhos nas Configurações. */
+.atalhos {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  align-items: baseline;
+  font-size: 12px;
+}
+.atalho { display: contents; }
+kbd {
+  display: inline-block;
+  min-width: 16px;
+  padding: 1px 6px;
+  border: 1px solid var(--c-border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--c-surface);
+  font-family: inherit;
+  font-size: 11px;
+  text-align: center;
+}

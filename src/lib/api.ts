@@ -57,13 +57,40 @@ export type HomeData = {
   logConflitado: boolean;
 };
 
-export type Account = { name: string; email: string };
+export type Account = {
+  id: string;
+  name: string;
+  email: string;
+  /** URL pública do avatar em `profiles.avatar_url`, ou null. */
+  avatarUrl: string | null;
+  /** Entrou pelo cache porque a rede falhou: publish e pull ficam bloqueados. */
+  offline?: boolean;
+  /**
+   * E-mail da ultima conta que assumiu este vault, quando nao e a atual.
+   * Presente = os arquivos do disco vieram de outra conta, e publicar agora
+   * mandaria o conteudo dela para esta. Ver comDono() no main.
+   */
+  contaAnterior?: string;
+};
 
-/** Saida do terminal do app. */
-export type TermEvent =
-  | { kind: "out"; text: string }
-  | { kind: "err"; text: string }
-  | { kind: "exit"; code: number };
+/**
+ * Conta do Claude Code desta MAQUINA — independente da conta do Athena.
+ * `arquivo` vem sempre, para a tela poder dizer onde olhar quando o formato
+ * do Claude Code mudar e o e-mail vier nulo.
+ */
+export type ClaudeConta = {
+  email: string | null;
+  org: string | null;
+  arquivo: string;
+  existe: boolean;
+};
+
+/** Um termo do glossário, com as aulas em que aparece. */
+export type TermoGlossario = {
+  termo: string;
+  contexto: string;
+  refs: { titulo: string; rel: string }[];
+};
 
 /** Resultado de `athena publish` / `athena pull` rodados pelo app. */
 export type ScriptResult = { ok: boolean; output: string; canForce: boolean };
@@ -75,6 +102,12 @@ type AthenaBridge = {
     onChange(cb: () => void): () => void;
   };
   config: { setClaudeBin(bin: string): Promise<boolean> };
+  /** A moldura da janela e desenhada pelo app — ver TitleBar.tsx. */
+  win: {
+    close(): Promise<boolean>;
+    /** Devolve o estado NOVO: true = maximizada. */
+    toggleMaximize(): Promise<boolean>;
+  };
   fs: {
     tree(scope: "raw" | "wiki"): Promise<TreeNode[]>;
     read(rel: string): Promise<string>;
@@ -93,6 +126,9 @@ type AthenaBridge = {
     home(): Promise<HomeData>;
     resolveLink(slug: string): Promise<string | null>;
     openUrl(url: string): Promise<boolean>;
+    glossario(): Promise<TermoGlossario[]>;
+    /** Busca dentro dos arquivos: uma linha por arquivo que casa. */
+    buscar(termo: string): Promise<{ rel: string; linha: number; trecho: string }[]>;
   };
   clipboard: { read(): Promise<string>; write(text: string): Promise<boolean> };
   status: {
@@ -103,20 +139,22 @@ type AthenaBridge = {
     start(cmd: Cmd, code: string, lesson: string | null): Promise<Job>;
     reply(text: string): Promise<void>;
     cancel(): Promise<void>;
+    /** Esvazia o transcript no main, nao so na tela. */
+    clear(): Promise<boolean>;
     snapshot(): Promise<Snapshot>;
     onEvent(cb: (e: SessionEvent) => void): () => void;
-  };
-  term: {
-    run(comando: string): Promise<boolean>;
-    cancel(): Promise<boolean>;
-    cwd(): Promise<string>;
-    onEvent(cb: (e: TermEvent) => void): () => void;
   };
   account: {
     status(): Promise<Account | null>;
     login(email: string, password: string): Promise<Account>;
     logout(): Promise<boolean>;
     signUp(email: string, senha: string, nome: string): Promise<Account | null>;
+    oauth(provider: "github" | "google"): Promise<Account>;
+    oauthCancel(): Promise<boolean>;
+    /** null = a pessoa fechou o seletor de arquivo. */
+    avatarPick(): Promise<Account | null>;
+    avatarRemove(): Promise<Account>;
+    assumirVault(email: string): Promise<boolean>;
     update(campos: { email?: string; password?: string; nome?: string }): Promise<{
       pendente: boolean;
     }>;
@@ -129,7 +167,10 @@ type AthenaBridge = {
     onLine(cb: (line: string) => void): () => void;
     onState(cb: (s: { running: boolean; name: string }) => void): () => void;
   };
-  claude: { openLogin(): Promise<boolean> };
+  claude: {
+    openLogin(): Promise<boolean>;
+    whoami(): Promise<ClaudeConta>;
+  };
 };
 
 declare global {

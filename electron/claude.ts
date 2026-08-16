@@ -141,6 +141,17 @@ export class ClaudeRunner extends EventEmitter {
     };
   }
 
+  /**
+   * Esvazia o transcript, sem tocar no estado nem no `seq`.
+   *
+   * O contador continua de onde estava de proposito: o renderer casa snapshot
+   * e evento ao vivo por `n`, e reiniciar do zero faria linha nova colidir com
+   * linha antiga que ainda estivesse na tela de outro painel.
+   */
+  limpar(): void {
+    this.lines = [];
+  }
+
   enqueue(cmd: Cmd, code: string, lesson: string | null): Job {
     const job: Job = {
       id: randomUUID(),

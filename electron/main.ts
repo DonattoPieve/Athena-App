@@ -4,6 +4,7 @@ import {
   clipboard,
   dialog,
   ipcMain,
+  Menu,
   net,
   protocol,
   shell,
@@ -17,7 +18,7 @@ import { Vault, slugify } from "./vault";
 import { ClaudeRunner, Cmd, SessionEvent } from "./claude";
 import * as account from "./account";
 import * as publish from "./publish";
-import { Terminal, TermEvent } from "./terminal";
+import * as biblioteca from "./biblioteca";
 
 type Config = {
   vaultPath?: string;
@@ -26,6 +27,8 @@ type Config = {
   autoPublish?: boolean;
   /** Puxar do banco uma vez na abertura do app. */
   autoPull?: boolean;
+  /** Ultima conta que assumiu cada vault: caminho -> e-mail. Ver comDono(). */
+  donos?: Record<string, string>;
 };
 
 const CONFIG_FILE = () => path.join(app.getPath("userData"), "athena-app.json");
@@ -48,7 +51,6 @@ let vault: Vault | null = null;
 let runner: ClaudeRunner | null = null;
 let watcher: FSWatcher | null = null;
 let statusWatcher: FSWatcher | null = null;
-let term: Terminal | null = null;
 
 function send(channel: string, payload: unknown) {
   win?.webContents.send(channel, payload);
@@ -76,11 +78,6 @@ function attachVault(root: string) {
       void afterJob(e.state, e.cmd);
     }
   });
-
-  // Terminal segue o vault: o cwd tem que ser a raiz, e nao onde o app abriu.
-  term?.removeAllListeners();
-  term = new Terminal(root);
-  term.on("event", (e: TermEvent) => send("term:event", e));
 
   watcher?.close();
   // OneDrive dispara eventos fantasma; o debounce do awaitWriteFinish
@@ -191,6 +188,82 @@ async function pullInicial() {
   runner?.log("Puxando do banco (abertura do app)...");
   const res = await runScript("pull", []);
   if (!res.ok) runner?.log("O pull da abertura falhou — o disco esta intacto.", "error");
+}
+
+/**
+ * De quem sao os arquivos deste vault?
+ *
+ * A conta e a pasta sao coisas independentes: entrar com outro e-mail nao troca
+ * um arquivo de lugar. O estrago aparece depois — `publish` manda o conteudo
+ * que esta no disco para a conta que estiver logada agora. Ja aconteceu aqui:
+ * login como uma conta nova, vault cheio do conteudo de outra.
+ *
+ * Entao o app anota, por pasta, qual foi a ultima conta que a assumiu, e avisa
+ * quando muda. So anota sozinho quando ainda nao havia anotacao — trocar por
+ * conta propria seria justamente perder o aviso.
+ */
+function comDono<T extends { email: string } | null>(conta: T): T {
+  if (!conta || !vault) return conta;
+  const cfg = readConfig();
+  const anterior = cfg.donos?.[vault.root];
+  if (!anterior) {
+    writeConfig({ ...cfg, donos: { ...(cfg.donos ?? {}), [vault.root]: conta.email } });
+    return conta;
+  }
+  if (anterior === conta.email) return conta;
+  return { ...conta, contaAnterior: anterior };
+}
+
+/**
+ * Qual conta do Claude Code este computador esta usando.
+ *
+ * A conta do Claude nao tem nada a ver com a do Athena: ela e da MAQUINA, e o
+ * app so herda quem ja estava logado quando o `claude` sobe. Ate agora nao
+ * havia jeito de saber qual era sem abrir um terminal e digitar `/status` —
+ * entao "de quem sao os creditos que este ingest gastou" era um chute.
+ *
+ * O arquivo e do Claude Code, nao nosso: o formato pode mudar sem aviso. Por
+ * isso a leitura e defensiva (varre o JSON atras de um e-mail em vez de exigir
+ * um caminho fixo) e a resposta sempre devolve `arquivo`, para a tela poder
+ * mandar a pessoa conferir no `/status` quando nao achar nada.
+ */
+type ClaudeConta = { email: string | null; org: string | null; arquivo: string; existe: boolean };
+
+function claudeConta(): ClaudeConta {
+  const home = app.getPath("home");
+  const cfg = process.env.CLAUDE_CONFIG_DIR;
+  const candidatos = [
+    ...(cfg ? [path.join(cfg, ".claude.json"), path.join(cfg, "claude.json")] : []),
+    path.join(home, ".claude.json"),
+    path.join(home, ".claude", ".claude.json"),
+  ];
+  const arquivo = candidatos.find((p) => fs.existsSync(p)) ?? candidatos[candidatos.length - 2];
+  if (!fs.existsSync(arquivo)) return { email: null, org: null, arquivo, existe: false };
+
+  try {
+    const dados = JSON.parse(fs.readFileSync(arquivo, "utf8")) as unknown;
+    let email: string | null = null;
+    let org: string | null = null;
+    // Busca em largura, com teto: o arquivo guarda historico de projeto e
+    // pode ser grande — nao vale a pena descer nele inteiro.
+    const fila: unknown[] = [dados];
+    for (let i = 0; i < 400 && fila.length; i++) {
+      const no = fila.shift();
+      if (!no || typeof no !== "object") continue;
+      for (const [k, v] of Object.entries(no as Record<string, unknown>)) {
+        if (typeof v === "string") {
+          if (!email && /^email(address)?$/i.test(k) && v.includes("@")) email = v;
+          if (!org && /^organization(name)?$/i.test(k)) org = v;
+        } else if (v && typeof v === "object") {
+          fila.push(v);
+        }
+      }
+      if (email && org) break;
+    }
+    return { email, org, arquivo, existe: true };
+  } catch {
+    return { email: null, org: null, arquivo, existe: true };
+  }
 }
 
 function requireVault(): Vault {
@@ -311,24 +384,71 @@ function registerIpc() {
 
   ipcMain.handle(
     "session:start",
-    (_e, cmd: Cmd, code: string, lesson: string | null) =>
-      requireRunner().enqueue(cmd, code, lesson),
+    async (_e, cmd: Cmd, code: string, lesson: string | null) => {
+      // Copia de seguranca ANTES de enfileirar: `redo` reescreve a pagina e
+      // `delete` a apaga. Guardar depois nao adiantaria nada.
+      if ((cmd === "redo" || cmd === "delete") && vault && lesson) {
+        const alvo = await vault.describe(code, lesson).catch(() => null);
+        for (const rel of [alvo?.wikiPage, alvo?.wikiReview]) {
+          if (!rel) continue;
+          const copia = await vault.arquivar(rel);
+          if (copia) runner?.log(`Copia guardada em ${copia}`);
+        }
+      }
+      return requireRunner().enqueue(cmd, code, lesson);
+    },
   );
   ipcMain.handle("session:reply", (_e, text: string) => requireRunner().reply(text));
   ipcMain.handle("session:cancel", () => requireRunner().cancel());
+  /** Limpar e do transcript do MAIN: so assim a linha nao volta no snapshot. */
+  ipcMain.handle("session:clear", () => {
+    runner?.limpar();
+    return true;
+  });
   // Painel recem-montado se reconstitui daqui — trocar de aba nao apaga o log.
   ipcMain.handle("session:snapshot", () =>
     runner ? runner.snapshot() : { state: null, lines: [], queue: [] },
   );
 
   // ---- conta do Athena (Supabase) — mesma sessao do `athena login` ----
-  ipcMain.handle("account:status", () => account.status(requireVault().root));
-  ipcMain.handle("account:login", (_e, email: string, password: string) =>
-    account.login(requireVault().root, email, password),
+  ipcMain.handle("account:status", async () =>
+    comDono(await account.status(requireVault().root)),
   );
-  ipcMain.handle("account:signUp", (_e, email: string, senha: string, nome: string) =>
-    account.signUp(requireVault().root, email, senha, nome),
+  ipcMain.handle("account:login", async (_e, email: string, password: string) =>
+    comDono(await account.login(requireVault().root, email, password)),
   );
+  ipcMain.handle("account:signUp", async (_e, email: string, senha: string, nome: string) =>
+    comDono(await account.signUp(requireVault().root, email, senha, nome)),
+  );
+  // O navegador do sistema, nao uma janela do Electron: Google e GitHub
+  // recusam login dentro de webview embutida.
+  ipcMain.handle("account:oauth", async (_e, provider: account.Provedor) =>
+    comDono(
+      await account.oauthLogin(requireVault().root, provider, (url) => {
+        void shell.openExternal(url);
+      }),
+    ),
+  );
+  ipcMain.handle("account:oauthCancel", () => account.oauthCancel());
+  /** Escolhe a imagem e sobe. Devolve null se a pessoa fechou o seletor. */
+  ipcMain.handle("account:avatarPick", async () => {
+    const res = await dialog.showOpenDialog({
+      title: "Escolha a foto de perfil",
+      properties: ["openFile"],
+      filters: [{ name: "Imagens", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }],
+    });
+    if (res.canceled || !res.filePaths[0]) return null;
+    return comDono(await account.avatarUpload(requireVault().root, res.filePaths[0]));
+  });
+  ipcMain.handle("account:avatarRemove", async () =>
+    comDono(await account.avatarRemove(requireVault().root)),
+  );
+  /** "Sim, este vault agora e desta conta" — apaga o aviso de troca. */
+  ipcMain.handle("account:assumirVault", (_e, email: string) => {
+    const cfg = readConfig();
+    writeConfig({ ...cfg, donos: { ...(cfg.donos ?? {}), [requireVault().root]: email } });
+    return true;
+  });
   ipcMain.handle(
     "account:update",
     (_e, campos: { email?: string; password?: string; nome?: string }) =>
@@ -338,6 +458,10 @@ function registerIpc() {
     account.logout(requireVault().root);
     return true;
   });
+
+  // ---- glossario: do DISCO, nao do banco ----
+  ipcMain.handle("fs:glossario", () => biblioteca.glossario(requireVault()));
+  ipcMain.handle("fs:buscar", (_e, termo: string) => requireVault().buscarConteudo(termo));
 
   // ---- publicacao (Supabase + R2), nao git ----
   ipcMain.handle("publish:run", (_e, name: publish.ScriptName, flags: string[]) =>
@@ -356,17 +480,19 @@ function registerIpc() {
     return readConfig().autoPull !== false;
   });
 
-  // ---- terminal ----
-  ipcMain.handle("term:run", (_e, comando: string) => {
-    if (!term) throw new Error("Nenhum vault selecionado.");
-    term.run(comando);
+  // ---- janela (a moldura e do app, nao do sistema) ----
+  ipcMain.handle("win:close", () => {
+    win?.close();
     return true;
   });
-  ipcMain.handle("term:cancel", () => {
-    term?.cancel();
-    return true;
+  ipcMain.handle("win:toggleMaximize", () => {
+    if (!win) return false;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+    return win.isMaximized();
   });
-  ipcMain.handle("term:cwd", () => vault?.root ?? "");
+
+  ipcMain.handle("claude:whoami", () => claudeConta());
 
   /**
    * Abre um terminal ja no `claude`. O login do Claude Code e interativo e
@@ -414,12 +540,32 @@ function registerProtocol() {
   });
 }
 
+/**
+ * O icone mora em build/, fora do bundle de codigo: `app.getAppPath()` aponta
+ * para a raiz do projeto no dev e para o asar no empacotado, e os dois tem a
+ * pasta build dentro. .ico no Windows (a barra de tarefas quer varios tamanhos
+ * num arquivo so), .png no resto.
+ */
+function iconePath() {
+  const nome = process.platform === "win32" ? "icon.ico" : "icon.png";
+  const p = path.join(app.getAppPath(), "build", nome);
+  return fs.existsSync(p) ? p : undefined;
+}
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 940,
+    icon: iconePath(),
+    // File/Edit/View/Window/Help e o menu que o Electron poe sozinho: nada ali
+    // e do Athena. Sai da janela e some do Alt.
+    autoHideMenuBar: true,
     backgroundColor: "#0A0A0C",
+    // Sem moldura no Windows/Linux: a barra de titulo e do app (TitleBar.tsx).
+    // No macOS a moldura fica, com os tres botoes embutidos — remove-la ali
+    // tiraria fechar/minimizar/zoom do lugar onde todo mac os tem.
+    frame: process.platform === "darwin",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -448,6 +594,12 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(() => {
+  // Sem isto o Windows agrupa a janela sob "Electron" na barra de tarefas e
+  // mostra o icone padrao mesmo com `icon` definido acima.
+  if (process.platform === "win32") app.setAppUserModelId("br.athena.app");
+  // `autoHideMenuBar` so esconde; sem isto o Alt ainda faz o menu aparecer.
+  // No macOS o menu da aplicacao e obrigatorio, entao la ele fica.
+  if (process.platform !== "darwin") Menu.setApplicationMenu(null);
   registerIpc();
   registerProtocol();
   createWindow();

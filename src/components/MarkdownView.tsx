@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { api, mensagemDeErro } from "../lib/api";
 import { athenaExtensions, splitFrontmatter, toLeitura } from "../lib/markdown";
+import { tf } from "../lib/i18n";
 
 /**
  * Leitura de uma nota. Mesmo pipeline do editor, com `editable: false` —
@@ -47,7 +48,7 @@ export function MarkdownView({
       try {
         const rel = await api.fs.resolveLink(slug);
         if (rel) onAbrir?.(rel);
-        else alert(`Não existe página para [[${slug}]] — link órfão.`);
+        else alert(tf("Não existe página para [[{slug}]] — link órfão.", { slug }));
       } catch (err) {
         alert(mensagemDeErro(err));
       }

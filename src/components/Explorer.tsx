@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { api, mensagemDeErro, type TreeNode } from "../lib/api";
+import { api, mensagemDeErro, parseSelection, type TreeNode } from "../lib/api";
 import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 import { useConfirm } from "./Confirm";
 import { Chevron, FileIcon, FolderIcon } from "./icons";
+import { t, tf } from "../lib/i18n";
 
 const EDITAVEIS = /\.(md|txt)$/i;
 const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
@@ -29,6 +30,8 @@ type Props = {
   onChanged: () => void;
   readOnly?: boolean;
   scope: "raw" | "wiki";
+  /** Dispara `athena delete CODIGO AULA` — quem executa e o App. */
+  onExcluir?: (code: string, lesson: string | null) => void;
 };
 
 export function Explorer({
@@ -39,6 +42,7 @@ export function Explorer({
   onChanged,
   readOnly,
   scope,
+  onExcluir,
 }: Props) {
   const menu = useContextMenu();
   const { confirmar, dialogo } = useConfirm();
@@ -61,6 +65,55 @@ export function Explorer({
     return node.dir ? node.rel : node.rel.split("/").slice(0, -1).join("/");
   }
 
+  /**
+   * "Excluir do Athena" — so na wiki, e so em pagina de aula.
+   *
+   * Apagar o .md da wiki na mao deixa a pagina viva no site ate o proximo
+   * publish, e deixa o MOC apontando para o vazio. `athena delete` e o caminho
+   * que o CLAUDE.md define: tira a pagina, desfaz as ligacoes e registra a
+   * remocao no log. Por isso este item nao mexe em arquivo — enfileira o
+   * comando.
+   */
+  function excluirDaWiki(node: TreeNode): MenuItem[] {
+    if (scope !== "wiki" || node.dir || !onExcluir) return [];
+    const alvo = parseSelection(node.rel);
+    if (!alvo) return [];
+
+    const oQue = alvo.lesson
+      ? tf("a aula {lesson}", { lesson: alvo.lesson })
+      : tf("a matéria {code} inteira", { code: alvo.code });
+    return [
+      { kind: "sep" },
+      {
+        label: t("Excluir do Athena"),
+        hint: "athena delete",
+        danger: true,
+        onClick: async () => {
+          const ok = await confirmar({
+            titulo: alvo.lesson
+              ? tf("Excluir {nome}?", { nome: node.name })
+              : tf("Excluir a matéria {code}?", { code: alvo.code }),
+            mensagem: tf(
+              "Isto roda {cmd}, que remove {oQue} da wiki, desfaz as ligações no MOC e anota a remoção no log.",
+              {
+                cmd: alvo.lesson
+                  ? `athena delete ${alvo.code} ${alvo.lesson}`
+                  : `athena delete ${alvo.code}`,
+                oQue,
+              },
+            ),
+            detalhe: node.rel,
+            nota: t(
+              "A sua nota em raw/ e o material oficial não são tocados — dá para gerar de novo depois. Do site a página só some no próximo publish.",
+            ),
+            confirmar: t("Excluir"),
+          });
+          if (ok) onExcluir(alvo.code, alvo.lesson);
+        },
+      },
+    ];
+  }
+
   function itensDe(node: TreeNode): MenuItem[] {
     const dir = dirDe(node);
     const podeCriar = gravavel(dir);
@@ -70,7 +123,7 @@ export function Explorer({
       ? [
           { kind: "sep" },
           {
-            label: "Abrir no programa padrão",
+            label: t("Abrir no programa padrão"),
             onClick: () => guard(() => api.fs.openExternal(node.rel)),
           },
         ]
@@ -78,34 +131,37 @@ export function Explorer({
 
     return [
       {
-        label: "Nova nota",
+        label: t("Nova nota"),
         hint: ".md",
         disabled: !podeCriar,
         onClick: () => setCriando({ dir, tipo: "nota" }),
       },
-      { label: "Nova pasta", disabled: !podeCriar, onClick: () => setCriando({ dir, tipo: "pasta" }) },
+      { label: t("Nova pasta"), disabled: !podeCriar, onClick: () => setCriando({ dir, tipo: "pasta" }) },
       { kind: "sep" },
-      { label: "Renomear", hint: "F2", disabled: !podeMexer, onClick: () => setRenaming(node.rel) },
-      { label: "Copiar caminho", onClick: () => void api.clipboard.write(node.rel) },
+      { label: t("Renomear"), hint: "F2", disabled: !podeMexer, onClick: () => setRenaming(node.rel) },
+      { label: t("Copiar caminho"), onClick: () => void api.clipboard.write(node.rel) },
       ...abrirMaterial,
       { kind: "sep" },
-      { label: "Revelar no Explorer", onClick: () => void api.fs.reveal(node.rel) },
+      { label: t("Revelar no Explorer"), onClick: () => void api.fs.reveal(node.rel) },
+      ...excluirDaWiki(node),
       {
-        label: node.dir ? "Apagar pasta" : "Apagar",
-        hint: "lixeira",
+        label: node.dir ? t("Apagar pasta") : t("Apagar"),
+        hint: t("lixeira"),
         danger: true,
         disabled: !podeMexer,
         onClick: async () => {
           const ok = await confirmar({
-            titulo: node.dir ? `Apagar a pasta ${node.name}?` : `Apagar ${node.name}?`,
+            titulo: node.dir
+              ? tf("Apagar a pasta {nome}?", { nome: node.name })
+              : tf("Apagar {nome}?", { nome: node.name }),
             mensagem: node.dir
-              ? "A pasta e tudo que está dentro dela vão para a lixeira do Windows."
-              : "O arquivo vai para a lixeira do Windows.",
+              ? t("A pasta e tudo que está dentro dela vão para a lixeira do Windows.")
+              : t("O arquivo vai para a lixeira do Windows."),
             detalhe: node.rel,
-            nota:
-              "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no " +
-              "próximo publish, que espelha o disco.",
-            confirmar: "Apagar",
+            nota: t(
+              "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no próximo publish, que espelha o disco.",
+            ),
+            confirmar: t("Apagar"),
           });
           if (ok) void guard(() => api.fs.trash(node.rel));
         },
@@ -119,11 +175,11 @@ export function Explorer({
     const podeCriar = gravavel(dir);
     return [
       {
-        label: "Nova pasta de matéria",
+        label: t("Nova pasta de matéria"),
         disabled: !podeCriar,
         onClick: () => setCriando({ dir, tipo: "pasta" }),
       },
-      { label: "Nova nota", disabled: !podeCriar, onClick: () => setCriando({ dir, tipo: "nota" }) },
+      { label: t("Nova nota"), disabled: !podeCriar, onClick: () => setCriando({ dir, tipo: "nota" }) },
     ];
   }
 
@@ -133,7 +189,7 @@ export function Explorer({
     <div style={{ minHeight: "100%" }} onContextMenu={(e) => menu.open(e, itensDoFundo())}>
       {nodes.length === 0 && !criando ? (
         <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
-          Nada aqui ainda. Botão direito para criar.
+          {t("Nada aqui ainda. Botão direito para criar.")}
         </p>
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -160,7 +216,7 @@ export function Explorer({
       {criandoNaRaiz && (
         <NomeInline
           inicial=""
-          placeholder={criando.tipo === "pasta" ? "nome da pasta" : "nome da nota"}
+          placeholder={criando.tipo === "pasta" ? t("nome da pasta") : t("nome da nota")}
           depth={0}
           onCancel={() => setCriando(null)}
           onConfirm={(nome) => {
@@ -219,7 +275,10 @@ function Row({
   setCriando: (c: Criando) => void;
   guard: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
-  const [open, setOpen] = useState(depth < 1);
+  // Tudo fechado ao abrir o app: a arvore inteira aberta e uma parede de nomes
+  // e o caminho ate a aula some no meio. Pasta que recebe arquivo novo continua
+  // abrindo sozinha (o efeito logo abaixo).
+  const [open, setOpen] = useState(false);
   const criandoAqui = criando?.dir === node.rel;
 
   useEffect(() => {
@@ -264,7 +323,7 @@ function Row({
             setRenaming(node.rel);
           }
         }}
-        title={readOnly ? `${node.rel} — somente leitura` : node.rel}
+        title={readOnly ? tf("{rel} — somente leitura", { rel: node.rel }) : node.rel}
       >
         {node.dir ? (
           <>
@@ -305,7 +364,7 @@ function Row({
             <li>
               <NomeInline
                 inicial=""
-                placeholder={criando.tipo === "pasta" ? "nome da pasta" : "nome da nota"}
+                placeholder={criando.tipo === "pasta" ? t("nome da pasta") : t("nome da nota")}
                 depth={depth + 1}
                 onCancel={() => setCriando(null)}
                 onConfirm={(nome) => {

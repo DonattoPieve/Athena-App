@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
+import { t } from "../lib/i18n";
 
 /**
  * Seletor de `[[wikilink]]`.
@@ -31,20 +32,20 @@ export function LinkPicker({
   return (
     <div className="card" style={{ padding: 12, marginTop: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span className="label">Link para aula</span>
+        <span className="label">{t("Link para aula")}</span>
         <button
           className="btn"
           style={{ marginLeft: "auto", padding: "3px 8px", fontSize: 11 }}
           onClick={onClose}
         >
-          fechar
+          {t("fechar")}
         </button>
       </div>
 
       <input
         className="field"
         autoFocus
-        placeholder="filtrar por slug ou matéria"
+        placeholder={t("filtrar por slug ou matéria")}
         value={filtro}
         onChange={(e) => setFiltro(e.target.value)}
         onKeyDown={(e) => {
@@ -56,7 +57,7 @@ export function LinkPicker({
       <div className="scroll" style={{ maxHeight: 200, marginTop: 8 }}>
         {lista.length === 0 ? (
           <p style={{ color: "var(--c-muted)", fontSize: 12, margin: "6px 2px" }}>
-            {aulas.length === 0 ? "Nenhuma aula publicada ainda." : "Nada com esse filtro."}
+            {aulas.length === 0 ? t("Nenhuma aula publicada ainda.") : t("Nada com esse filtro.")}
           </p>
         ) : (
           lista.map((a) => (

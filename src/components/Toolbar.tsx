@@ -1,4 +1,5 @@
 import { useEditorState, type Editor } from "@tiptap/react";
+import { t } from "../lib/i18n";
 
 /**
  * Barra do editor. Cada botao e um comando do Tiptap que tem representacao em
@@ -41,39 +42,39 @@ export function Toolbar({ editor, onLink }: { editor: Editor; onLink?: () => voi
       </Group>
 
       <Group>
-        <Tool label="lista" active={s.bullet} onClick={() => c().toggleBulletList().run()} />
+        <Tool label={t("lista")} active={s.bullet} onClick={() => c().toggleBulletList().run()} />
         <Tool label="1." active={s.ordered} onClick={() => c().toggleOrderedList().run()} />
-        <Tool label="tarefa" active={s.task} onClick={() => c().toggleTaskList().run()} />
+        <Tool label={t("tarefa")} active={s.task} onClick={() => c().toggleTaskList().run()} />
       </Group>
 
       <Group>
-        <Tool label="citação" active={s.quote} onClick={() => c().toggleBlockquote().run()} />
-        <Tool label="bloco de código" active={s.codeBlock} onClick={() => c().toggleCodeBlock().run()} />
-        <Tool label="—" title="linha divisória" onClick={() => c().setHorizontalRule().run()} />
+        <Tool label={t("citação")} active={s.quote} onClick={() => c().toggleBlockquote().run()} />
+        <Tool label={t("bloco de código")} active={s.codeBlock} onClick={() => c().toggleCodeBlock().run()} />
+        <Tool label="—" title={t("linha divisória")} onClick={() => c().setHorizontalRule().run()} />
       </Group>
 
       <Group>
         {onLink && (
           <Tool
             label="[[link]]"
-            title="Link para outra aula — escolhe da lista de páginas que existem"
+            title={t("Link para outra aula — escolhe da lista de páginas que existem")}
             onClick={onLink}
           />
         )}
         <Tool
-          label="tabela"
+          label={t("tabela")}
           active={s.table}
-          title="Tabela 3×3 com cabeçalho — vira tabela markdown no arquivo"
+          title={t("Tabela 3×3 com cabeçalho — vira tabela markdown no arquivo")}
           onClick={() =>
             c().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
           }
         />
         {s.table && (
           <>
-            <Tool label="+linha" onClick={() => c().addRowAfter().run()} />
-            <Tool label="+coluna" onClick={() => c().addColumnAfter().run()} />
-            <Tool label="−linha" onClick={() => c().deleteRow().run()} />
-            <Tool label="−coluna" onClick={() => c().deleteColumn().run()} />
+            <Tool label={t("+linha")} onClick={() => c().addRowAfter().run()} />
+            <Tool label={t("+coluna")} onClick={() => c().addColumnAfter().run()} />
+            <Tool label={t("−linha")} onClick={() => c().deleteRow().run()} />
+            <Tool label={t("−coluna")} onClick={() => c().deleteColumn().run()} />
           </>
         )}
       </Group>

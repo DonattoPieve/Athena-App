@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { api, type Cmd, type Target } from "../lib/api";
+import { SeletorPagina } from "./SeletorPagina";
+import { t, tf } from "../lib/i18n";
 
 type Props = {
   target: Target | null;
@@ -10,6 +12,12 @@ type Props = {
 export function CommandBar({ target, busy, onStarted }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [typed, setTyped] = useState("");
+  /**
+   * Regerar age sobre uma pagina ESCOLHIDA, nao sobre a selecao da arvore.
+   * Antes usava o alvo selecionado — que e a ultima coisa em que voce clicou,
+   * quase nunca a que quer refazer.
+   */
+  const [escolhendo, setEscolhendo] = useState(false);
 
   const hasSource = !!target && (!!target.rawNote || target.official.length > 0);
   const hasPage = !!target?.wikiPage;
@@ -24,9 +32,27 @@ export function CommandBar({ target, busy, onStarted }: Props) {
   if (!target) {
     return (
       <div className="card" style={{ padding: 16 }}>
-        <p style={{ margin: 0, color: "var(--c-muted)" }}>
-          Selecione uma aula ou uma matéria na árvore para habilitar os comandos.
+        {escolhendo && (
+          <SeletorPagina
+            titulo={t("Regerar qual página?")}
+            aviso={t(
+              "A página é reescrita do zero a partir do material oficial. Sua nota em raw/ não é tocada.",
+            )}
+            onFechar={() => setEscolhendo(false)}
+            onEscolher={async (a) => {
+              setEscolhendo(false);
+              await api.session.start("redo", a.code, a.lesson);
+              onStarted();
+            }}
+          />
+        )}
+        <p style={{ margin: "0 0 12px", color: "var(--c-muted)" }}>
+          {t("Selecione uma aula ou uma matéria na árvore para habilitar os comandos.")}
         </p>
+        {/* Regerar nao depende da arvore: ele tem seletor proprio. */}
+        <button className="btn" disabled={busy} onClick={() => setEscolhendo(true)}>
+          {t("Regerar do zero…")}
+        </button>
       </div>
     );
   }
@@ -41,11 +67,25 @@ export function CommandBar({ target, busy, onStarted }: Props) {
 
   return (
     <div className="card" style={{ padding: 16 }}>
+      {escolhendo && (
+        <SeletorPagina
+          titulo={t("Regerar qual página?")}
+          aviso={t(
+            "A página é reescrita do zero a partir do material oficial. Sua nota em raw/ não é tocada.",
+          )}
+          onFechar={() => setEscolhendo(false)}
+          onEscolher={async (a) => {
+            setEscolhendo(false);
+            await api.session.start("redo", a.code, a.lesson);
+            onStarted();
+          }}
+        />
+      )}
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
-        <span className="label">Alvo</span>
+        <span className="label">{t("Alvo")}</span>
         <code style={{ color: "var(--c-accent)" }}>
           {target.code}
-          {target.lesson ? ` / ${target.lesson}` : " — matéria inteira"}
+          {target.lesson ? ` / ${target.lesson}` : ` ${t("— matéria inteira")}`}
         </code>
       </div>
 
@@ -56,35 +96,31 @@ export function CommandBar({ target, busy, onStarted }: Props) {
           onClick={() => run("ingest")}
           title={
             isSubjectScope
-              ? "Selecione uma aula"
+              ? t("Selecione uma aula")
               : hasSource
-                ? "Gera a página a partir do material oficial"
-                : "Não há nota nem material oficial para esta aula"
+                ? t("Gera a página a partir do material oficial")
+                : t("Não há nota nem material oficial para esta aula")
           }
         >
-          Gerar página
+          {t("Gerar página")}
         </button>
 
         <button
           className="btn"
-          disabled={busy || !hasPage}
-          onClick={() => run("redo")}
-          title={
-            hasPage
-              ? "Reescreve do zero — use quando quiser mudar a estrutura"
-              : "Ainda não existe página para regerar"
-          }
+          disabled={busy}
+          onClick={() => setEscolhendo(true)}
+          title={t("Escolha qual página reescrever do zero")}
         >
-          Regerar do zero
+          {t("Regerar do zero…")}
         </button>
 
         <button
           className="btn"
           disabled={busy || !hasPage}
           onClick={() => run("review")}
-          title={hasPage ? "Questões de fixação" : "Review precisa de uma aula existente"}
+          title={hasPage ? t("Questões de fixação") : t("Review precisa de uma aula existente")}
         >
-          Questões
+          {t("Questões")}
         </button>
 
         <button
@@ -96,7 +132,7 @@ export function CommandBar({ target, busy, onStarted }: Props) {
           }}
           style={{ marginLeft: "auto" }}
         >
-          Remover
+          {t("Remover")}
         </button>
       </div>
 
@@ -114,23 +150,26 @@ export function CommandBar({ target, busy, onStarted }: Props) {
         >
           <p style={{ margin: "0 0 8px", fontWeight: 500 }}>
             {isSubjectScope
-              ? `Remover a matéria ${target.code} inteira`
-              : `Remover a aula ${target.lesson}`}
+              ? tf("Remover a matéria {code} inteira", { code: target.code })
+              : tf("Remover a aula {lesson}", { lesson: target.lesson ?? "" })}
           </p>
           <p style={{ margin: "0 0 10px", color: "var(--c-muted)", fontSize: 12 }}>
-            Suas notas em raw/ e os PDFs originais ficam intactos. Some o que foi gerado:
+            {t("Suas notas em raw/ e os PDFs originais ficam intactos. Some o que foi gerado:")}
           </p>
           <pre className="term" style={{ marginBottom: 12 }}>
             {isSubjectScope
-              ? `wiki/subjects/${target.code}-*/\nathena-web/wiki/subjects/${target.code}-*/\nathena-web/public/materials/${target.code}-*/\nlinha da matéria em index.md`
+              ? `wiki/subjects/${target.code}-*/\nathena-web/wiki/subjects/${target.code}-*/\nathena-web/public/materials/${target.code}-*/\n` +
+                tf("linha da matéria em {file}", { file: "index.md" })
               : deleteTargets.join("\n") +
-                (target.moc ? `\nlinha [[${target.lesson}]] em ${target.moc}` : "")}
+                (target.moc
+                  ? `\n` + tf("linha [[{lesson}]] em {moc}", { lesson: target.lesson ?? "", moc: target.moc })
+                  : "")}
           </pre>
 
           {isSubjectScope && (
             <input
               className="field"
-              placeholder={`Digite ${target.code} para confirmar`}
+              placeholder={tf("Digite {code} para confirmar", { code: target.code })}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               style={{ marginBottom: 10 }}
@@ -146,10 +185,10 @@ export function CommandBar({ target, busy, onStarted }: Props) {
                 run("delete");
               }}
             >
-              Remover
+              {t("Remover")}
             </button>
             <button className="btn" onClick={() => setConfirmDelete(false)}>
-              Cancelar
+              {t("Cancelar")}
             </button>
           </div>
         </div>
@@ -159,14 +198,15 @@ export function CommandBar({ target, busy, onStarted }: Props) {
 }
 
 function Facts({ target }: { target: Target }) {
+  const semOficial = t("nenhum encontrado");
   const rows: [string, string][] = [
-    ["Nota do aluno", target.rawNote ?? "—"],
+    [t("Nota do aluno"), target.rawNote ?? "—"],
     [
-      "Material oficial",
-      target.official.length ? target.official.map(base).join(", ") : "nenhum encontrado",
+      t("Material oficial"),
+      target.official.length ? target.official.map(base).join(", ") : semOficial,
     ],
-    ["Página gerada", target.wikiPage ?? "—"],
-    ["Review", target.wikiReview ?? "—"],
+    [t("Página gerada"), target.wikiPage ?? "—"],
+    [t("Review"), target.wikiReview ?? "—"],
   ];
   return (
     <dl
@@ -186,7 +226,7 @@ function Facts({ target }: { target: Target }) {
           <dd
             style={{
               margin: 0,
-              color: v === "—" || v.startsWith("nenhum") ? "var(--c-muted)" : "var(--c-text)",
+              color: v === "—" || v === semOficial ? "var(--c-muted)" : "var(--c-text)",
               overflowWrap: "anywhere",
             }}
           >

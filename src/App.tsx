@@ -8,20 +8,27 @@ import { PublishPanel } from "./components/PublishPanel";
 import { NoteEditor } from "./components/NoteEditor";
 import { FileEditor } from "./components/FileEditor";
 import { MarkdownView } from "./components/MarkdownView";
+import { Leitura } from "./components/Leitura";
 import { MaterialView } from "./components/MaterialView";
+import { ImageView } from "./components/ImageView";
 import { Login } from "./components/Login";
-import { TerminalPanel } from "./components/TerminalPanel";
 import { Settings } from "./components/Settings";
 import { Profile } from "./components/Profile";
+import { Avatar } from "./components/Avatar";
+import { Glossario } from "./components/Biblioteca";
+import { TitleBar } from "./components/TitleBar";
+import { useConfirm } from "./components/Confirm";
+import { SeletorPagina } from "./components/SeletorPagina";
+import { t, tf } from "./lib/i18n";
 import {
   IconArquivos,
   IconBusca,
   IconComandos,
   IconConfig,
   IconLado,
+  IconLivro,
   IconMais,
   IconPerfil,
-  IconTerminal,
 } from "./components/icons";
 import type { Account } from "./lib/api";
 
@@ -29,6 +36,8 @@ type Scope = "raw" | "wiki";
 
 const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
 const TEXTO = /\.(md|txt)$/i;
+/** O Chromium do Electron desenha todos estes — nao precisa de programa de fora. */
+const IMAGEM = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
 /** Editavel = raw/ inteiro menos raw/INATEL — espelha o vault.ts. */
 const EDITAVEL = (rel: string) => rel.startsWith("raw/") && !rel.startsWith("raw/INATEL/");
 
@@ -45,29 +54,57 @@ const EDITAVEL = (rel: string) => rel.startsWith("raw/") && !rel.startsWith("raw
 type Aba =
   | { id: "home"; tipo: "home" }
   | { id: "comandos"; tipo: "comandos" }
-  | { id: "terminal"; tipo: "terminal" }
   | { id: "config"; tipo: "config" }
   | { id: "perfil"; tipo: "perfil" }
   | { id: "nova-nota"; tipo: "nova-nota" }
+  | { id: "glossario"; tipo: "glossario" }
   | { id: string; tipo: "arquivo"; rel: string };
 
 const ABA_HOME: Aba = { id: "home", tipo: "home" };
 const ABA_COMANDOS: Aba = { id: "comandos", tipo: "comandos" };
-const ABA_TERMINAL: Aba = { id: "terminal", tipo: "terminal" };
 const ABA_CONFIG: Aba = { id: "config", tipo: "config" };
 const ABA_PERFIL: Aba = { id: "perfil", tipo: "perfil" };
+const ABA_GLOSSARIO: Aba = { id: "glossario", tipo: "glossario" };
 
 const ROTULO: Record<string, string> = {
-  home: "Home",
-  comandos: "Comandos",
-  terminal: "Terminal",
-  config: "Configurações",
-  perfil: "Perfil",
-  "nova-nota": "Nova nota",
+  home: t("Home"),
+  comandos: t("Comandos"),
+  config: t("Configurações"),
+  perfil: t("Perfil"),
+  "nova-nota": t("Nova nota"),
+  glossario: t("Glossário"),
 };
 
 /** Painel que o rail de icones mostra na lateral. */
 type Painel = "arquivos" | "busca";
+
+/** Ordem de fabrica do rail. A escolhida pelo usuario mora no localStorage. */
+const RAIL_PADRAO = [
+  "arquivos",
+  "busca",
+  "glossario",
+  "comandos",
+  "nova",
+  "config",
+  "perfil",
+];
+
+/**
+ * Ordem salva reconciliada com a de fabrica: some o que nao existe mais e
+ * entram no fim os icones criados depois de a ordem ter sido salva. Sem isto,
+ * quem arrastou uma vez deixaria de ver qualquer botao novo do app.
+ */
+function lerOrdemRail(): string[] {
+  let salva: string[] = [];
+  try {
+    const bruto = JSON.parse(localStorage.getItem("athena-rail") ?? "[]");
+    if (Array.isArray(bruto)) salva = bruto.filter((x) => typeof x === "string");
+  } catch {
+    salva = [];
+  }
+  const validos = salva.filter((id) => RAIL_PADRAO.includes(id));
+  return [...validos, ...RAIL_PADRAO.filter((id) => !validos.includes(id))];
+}
 
 const MENU_MIN = 190;
 const MENU_MAX = 520;
@@ -96,6 +133,13 @@ export default function App() {
   const [painel, setPainel] = useState<Painel>("arquivos");
   const [busca, setBusca] = useState("");
   const [todos, setTodos] = useState<{ nome: string; rel: string }[]>([]);
+  /** Resultados de dentro dos arquivos — o nome nem sempre lembra o assunto. */
+  const [noConteudo, setNoConteudo] = useState<
+    { rel: string; linha: number; trecho: string }[]
+  >([]);
+
+  const [ordemRail, setOrdemRail] = useState<string[]>(lerOrdemRail);
+  const [railArrasto, setRailArrasto] = useState<number | null>(null);
 
   /** Lado da lateral: quem usa em monitor grande costuma querer do outro. */
   const [lado, setLado] = useState<"esq" | "dir">(
@@ -107,7 +151,49 @@ export default function App() {
     return salvo >= MENU_MIN && salvo <= MENU_MAX ? salvo : MENU_PADRAO;
   });
 
+  const { confirmar, dialogo } = useConfirm();
+  /** Ctrl+P: abrir arquivo sem tirar a mao do teclado. */
+  const [abrindoRapido, setAbrindoRapido] = useState(false);
+
   const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+
+  /**
+   * Atalhos.
+   *
+   * O app tem cara de IDE; quem usa IDE tem o reflexo no dedo. Ctrl+P abre
+   * pagina, Ctrl+W fecha a aba, Ctrl+Shift+P vai para os comandos.
+   *
+   * O Ctrl+W NAO dispara com o cursor dentro do editor. Fechar a aba com a
+   * mao no texto e o caminho curto para perder o que estava sendo escrito, e
+   * o dedo erra `w` mirando em outra tecla o tempo todo. Ctrl+P continua
+   * valendo la: abrir outra pagina no meio da escrita e pedido legitimo.
+   *
+   * A lista destes atalhos vive em Configuracoes — atalho que so existe no
+   * codigo e atalho que ninguem usa.
+   */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      const alvo = e.target as HTMLElement | null;
+      const escrevendo =
+        !!alvo &&
+        (alvo.isContentEditable ||
+          alvo.tagName === "INPUT" ||
+          alvo.tagName === "TEXTAREA");
+
+      const k = e.key.toLowerCase();
+      if (k === "p") {
+        e.preventDefault();
+        if (e.shiftKey) abrirFixa(ABA_COMANDOS);
+        else setAbrindoRapido(true);
+      } else if (k === "w" && !escrevendo) {
+        e.preventDefault();
+        fechar(ativa);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   useEffect(() => {
     localStorage.setItem("athena-menu-w", String(larguraMenu));
@@ -129,6 +215,19 @@ export default function App() {
     api.vault.get().then((v) => setVaultPath(v.path));
     return api.vault.onChange(refresh);
   }, [refresh]);
+
+  // Busca no conteudo com espera: cada tecla varreria o vault inteiro.
+  useEffect(() => {
+    const q = busca.trim();
+    if (q.length < 2) {
+      setNoConteudo([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      api.fs.buscar(q).then(setNoConteudo).catch(() => setNoConteudo([]));
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [busca]);
 
   // A sessao do Supabase e a porta: sem ela, o app nem monta.
   useEffect(() => {
@@ -190,6 +289,41 @@ export default function App() {
     });
   }
 
+  /**
+   * Regera a pagina de um caminho. Confirma antes: `redo` reescreve o arquivo
+   * inteiro, e um clique sem aviso num botao ao lado da estrela seria caro.
+   */
+  async function regerar(rel: string) {
+    const alvo = parseSelection(rel);
+    if (!alvo?.lesson) return;
+    const ok = await confirmar({
+      titulo: tf("Regerar {lesson}?", { lesson: alvo.lesson }),
+      mensagem: tf(
+        "Roda {cmd}: a página é reescrita do ZERO a partir do material oficial, sem reaproveitar a versão atual.",
+        { cmd: `athena redo ${alvo.code} ${alvo.lesson}` },
+      ),
+      detalhe: rel,
+      nota: t(
+        "Sua nota em raw/ e o material oficial não são tocados. A versão atual da página se perde — se ela tem edição sua à mão, copie antes.",
+      ),
+      confirmar: t("Regerar"),
+    });
+    if (!ok) return;
+    await api.session.start("redo", alvo.code, alvo.lesson);
+  }
+
+  /** Mesma mecanica das abas, aplicada aos icones do rail. */
+  function moverRail(de: number, para: number) {
+    if (de === para) return;
+    setOrdemRail((atual) => {
+      const copia = [...atual];
+      const [movido] = copia.splice(de, 1);
+      copia.splice(para, 0, movido);
+      localStorage.setItem("athena-rail", JSON.stringify(copia));
+      return copia;
+    });
+  }
+
   /** Solta a aba arrastada na posicao de destino. */
   function reordenar(de: number, para: number) {
     if (de === para) return;
@@ -237,7 +371,7 @@ export default function App() {
   if (vaultPath && conta === null) {
     return (
       <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
-        <p style={{ color: "var(--c-muted)" }}>verificando a conta…</p>
+        <p style={{ color: "var(--c-muted)" }}>{t("verificando a conta…")}</p>
       </div>
     );
   }
@@ -261,11 +395,11 @@ export default function App() {
         <div className="card" style={{ padding: 28, maxWidth: 480, textAlign: "center" }}>
           <h1 style={{ fontSize: "1.7rem", fontWeight: 600, margin: "0 0 8px" }}>Athena</h1>
           <p style={{ color: "var(--c-muted)", margin: "0 0 20px" }}>
-            Aponte para a pasta do vault — a mesma que tem <code>CLAUDE.md</code> e{" "}
-            <code>raw/</code>.
+            {t("Aponte para a pasta do vault — a mesma que tem")} <code>CLAUDE.md</code>{" "}
+            {t("e")} <code>raw/</code>.
           </p>
           <button className="btn btn-primary" onClick={pick}>
-            Escolher pasta
+            {t("Escolher pasta")}
           </button>
           {error && <p style={{ color: "#e24b4a", marginTop: 14, fontSize: 12 }}>{error}</p>}
         </div>
@@ -280,6 +414,7 @@ export default function App() {
   /** Conteudo de uma aba de arquivo: edita, le ou visualiza. */
   function Arquivo({ rel }: { rel: string }) {
     if (MATERIAL.test(rel)) return <MaterialView rel={rel} />;
+    if (IMAGEM.test(rel)) return <ImageView rel={rel} />;
 
     if (TEXTO.test(rel) && EDITAVEL(rel)) {
       return (
@@ -295,88 +430,109 @@ export default function App() {
     }
 
     if (TEXTO.test(rel)) {
-      return (
-        <div className="card" style={{ padding: 24 }}>
-          <p className="label" style={{ marginTop: 0 }}>
-            {rel} · somente leitura
-          </p>
-          <MarkdownView source={fileText} onAbrir={abrir} />
-        </div>
-      );
+      return <Leitura rel={rel} texto={fileText} onAbrir={abrir} onRegerar={regerar} />;
     }
 
     return (
       <div className="card" style={{ padding: 24 }}>
         <p style={{ color: "var(--c-muted)", margin: 0 }}>
-          Não sei abrir <code>{rel}</code> aqui. Use o botão direito na árvore para abrir no
-          programa padrão.
+          {t("Não sei abrir")} <code>{rel}</code>{" "}
+          {t("aqui. Use o botão direito na árvore para abrir no programa padrão.")}
         </p>
       </div>
     );
   }
 
+  /**
+   * Os botoes do rail viram DADO para poderem ser reordenados: a ordem e uma
+   * lista de ids no localStorage, e o arrasto so mexe nessa lista. Ids que
+   * sumirem de uma versao para outra sao ignorados, e ids novos entram no fim —
+   * assim uma ordem antiga salva nunca esconde um icone recem-criado.
+   */
+  const RAIL: Record<string, { icone: React.ReactNode; titulo: string; ativo: boolean; ir: () => void }> = {
+    arquivos: {
+      icone: <IconArquivos />,
+      titulo: t("Arquivos"),
+      ativo: painel === "arquivos",
+      ir: () => setPainel("arquivos"),
+    },
+    busca: {
+      icone: <IconBusca />,
+      titulo: t("Buscar arquivo"),
+      ativo: painel === "busca",
+      ir: () => setPainel("busca"),
+    },
+    comandos: {
+      icone: <IconComandos />,
+      titulo: t("Comandos do Athena (gerar, regerar, questões, remover)"),
+      ativo: ativa === "comandos",
+      ir: () => abrirFixa(ABA_COMANDOS),
+    },
+    glossario: {
+      icone: <IconLivro />,
+      titulo: t("Glossário"),
+      ativo: ativa === "glossario",
+      ir: () => abrirFixa(ABA_GLOSSARIO),
+    },
+    nova: {
+      icone: <IconMais />,
+      titulo: t("Nova nota"),
+      ativo: ativa === "nova-nota",
+      ir: () => abrirFixa({ id: "nova-nota", tipo: "nova-nota" }),
+    },
+    config: {
+      icone: <IconConfig />,
+      titulo: t("Configurações"),
+      ativo: ativa === "config",
+      ir: () => abrirFixa(ABA_CONFIG),
+    },
+    perfil: {
+      icone: <IconPerfil />,
+      titulo: tf("Perfil — {nome}", { nome: contaAtual.name || contaAtual.email }),
+      ativo: ativa === "perfil",
+      ir: () => abrirFixa(ABA_PERFIL),
+    },
+  };
+
   const railBotoes = (
     <div className="rail">
-      <button
-        className="rail-btn"
-        data-active={painel === "arquivos"}
-        title="Arquivos"
-        onClick={() => setPainel("arquivos")}
-      >
-        <IconArquivos />
-      </button>
-      <button
-        className="rail-btn"
-        data-active={painel === "busca"}
-        title="Buscar arquivo"
-        onClick={() => setPainel("busca")}
-      >
-        <IconBusca />
-      </button>
-      <button
-        className="rail-btn"
-        data-active={ativa === "terminal"}
-        title="Terminal"
-        onClick={() => abrirFixa(ABA_TERMINAL)}
-      >
-        <IconTerminal />
-      </button>
-      <button
-        className="rail-btn"
-        data-active={ativa === "comandos"}
-        title="Comandos do Athena (gerar, regerar, questões, remover)"
-        onClick={() => abrirFixa(ABA_COMANDOS)}
-      >
-        <IconComandos />
-      </button>
-      <button
-        className="rail-btn"
-        data-active={ativa === "nova-nota"}
-        title="Nova nota"
-        onClick={() => abrirFixa({ id: "nova-nota", tipo: "nova-nota" })}
-      >
-        <IconMais />
-      </button>
+      {ordemRail.map((id, i) => {
+        const b = RAIL[id];
+        if (!b) return null;
+        return (
+          <button
+            key={id}
+            className="rail-btn"
+            data-active={b.ativo}
+            data-arrastando={railArrasto === i}
+            title={tf("{titulo}\n(arraste para mudar de lugar)", { titulo: b.titulo })}
+            draggable
+            onClick={b.ir}
+            onDragStart={(e) => {
+              setRailArrasto(i);
+              e.dataTransfer.effectAllowed = "move";
+              e.dataTransfer.setData("text/plain", id);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (railArrasto !== null) moverRail(railArrasto, i);
+              setRailArrasto(null);
+            }}
+            onDragEnd={() => setRailArrasto(null)}
+          >
+            {b.icone}
+          </button>
+        );
+      })}
 
+      {/* Fora da lista de proposito: nao abre painel nenhum, so vira o layout. */}
       <button
         className="rail-btn rail-fim"
-        data-active={ativa === "config"}
-        title="Configurações"
-        onClick={() => abrirFixa(ABA_CONFIG)}
-      >
-        <IconConfig />
-      </button>
-      <button
-        className="rail-btn"
-        data-active={ativa === "perfil"}
-        title={`Perfil — ${contaAtual.email}`}
-        onClick={() => abrirFixa(ABA_PERFIL)}
-      >
-        <IconPerfil />
-      </button>
-      <button
-        className="rail-btn"
-        title={lado === "esq" ? "Mover a lateral para a direita" : "Mover a lateral para a esquerda"}
+        title={lado === "esq" ? t("Mover a lateral para a direita") : t("Mover a lateral para a esquerda")}
         onClick={() => setLado((l) => (l === "esq" ? "dir" : "esq"))}
       >
         <IconLado direita={lado === "esq"} />
@@ -409,6 +565,21 @@ export default function App() {
         >
           {vaultPath}
         </p>
+        {/* Quem esta logado fica a vista: a conta decide para ONDE o publish
+            manda, e ate agora so dava para descobrir abrindo o Perfil. */}
+        <button
+          className="quem-sou"
+          title={tf("{nome} · {email} — abrir o perfil", {
+            nome: contaAtual.name,
+            email: contaAtual.email,
+          })}
+          onClick={() => abrirFixa(ABA_PERFIL)}
+        >
+          <Avatar conta={contaAtual} />
+          {/* Nome, nao e-mail: e o que a pessoa reconhece de relance. O e-mail
+              continua no title, que e onde se confere quando a duvida aparece. */}
+          <span className="quem-sou-nome">{contaAtual.name || contaAtual.email}</span>
+        </button>
       </div>
 
       {painel === "arquivos" ? (
@@ -433,7 +604,7 @@ export default function App() {
           </div>
 
           <p className="label" style={{ padding: "6px 12px 2px" }}>
-            Explorer {scope === "wiki" && "· somente leitura"}
+            {t("Explorer")} {scope === "wiki" && t("· somente leitura")}
           </p>
           <div className="scroll" style={{ flex: 1, padding: "0 8px 12px", minHeight: 0 }}>
             <Explorer
@@ -444,6 +615,10 @@ export default function App() {
               scope={scope}
               readOnly={scope === "wiki"}
               onOpen={abrir}
+              onExcluir={async (code, lesson) => {
+                await api.session.start("delete", code, lesson);
+                setAtiva("comandos");
+              }}
             />
           </div>
         </>
@@ -453,7 +628,7 @@ export default function App() {
             <input
               className="field"
               autoFocus
-              placeholder="Nome do arquivo…"
+              placeholder={t("Nome do arquivo…")}
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={(e) => e.key === "Escape" && setBusca("")}
@@ -468,13 +643,13 @@ export default function App() {
               if (!q)
                 return (
                   <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
-                    Digite para procurar em raw/ e wiki/.
+                    {t("Digite para procurar em raw/ e wiki/.")}
                   </p>
                 );
-              if (achados.length === 0)
+              if (achados.length === 0 && noConteudo.length === 0)
                 return (
                   <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
-                    Nada com “{busca}”.
+                    {tf("Nada com “{q}”.", { q: busca })}
                   </p>
                 );
               return achados.map((f) => (
@@ -504,6 +679,33 @@ export default function App() {
                 </button>
               ));
             })()}
+
+            {/* Dentro dos arquivos. Separado do nome de proposito: sao duas
+                perguntas diferentes — "como se chamava?" e "onde eu falei
+                disso?" — e misturar as duas listas esconde a segunda. */}
+            {noConteudo.length > 0 && (
+              <>
+                <p className="label" style={{ padding: "12px 10px 4px" }}>
+                  {tf("No conteúdo · {n}", { n: noConteudo.length })}
+                </p>
+                {noConteudo.map((r) => (
+                  <button
+                    key={`${r.rel}:${r.linha}`}
+                    className="nav-item busca-conteudo"
+                    onClick={() => {
+                      setSelected(r.rel);
+                      abrir(r.rel);
+                    }}
+                    title={`${r.rel}:${r.linha}`}
+                  >
+                    <span className="truncar" style={{ fontSize: 12 }}>
+                      {(r.rel.split("/").pop() ?? r.rel).replace(/\.md$/, "")}
+                    </span>
+                    <span className="busca-trecho">{r.trecho}</span>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </>
       )}
@@ -515,7 +717,7 @@ export default function App() {
       className="splitter"
       onMouseDown={arrastarMenu}
       onDoubleClick={() => setLarguraMenu(MENU_PADRAO)}
-      title="Arraste para redimensionar · duplo clique volta ao padrão"
+      title={t("Arraste para redimensionar · duplo clique volta ao padrão")}
       role="separator"
       aria-orientation="vertical"
     />
@@ -557,7 +759,7 @@ export default function App() {
             {a.id !== "home" && (
               <button
                 className="tab-x"
-                title="Fechar"
+                title={t("Fechar")}
                 onClick={(e) => {
                   e.stopPropagation();
                   fechar(a.id);
@@ -570,11 +772,18 @@ export default function App() {
         ))}
         <button
           className="tab-add"
-          title="Nova nota"
+          title={t("Nova nota")}
           onClick={() => abrirFixa({ id: "nova-nota", tipo: "nova-nota" })}
         >
           +
         </button>
+
+        {/* Sempre montado e sempre visível, na ponta direita da barra: o
+            transcript vive aqui, e é o único aviso de que o Claude parou para
+            perguntar. Some da barra em nenhuma tela — nem na leitura. */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 6 }}>
+          <SessionPanel onStateChange={setBusy} />
+        </div>
       </div>
 
       <div
@@ -588,6 +797,42 @@ export default function App() {
           minHeight: 0,
         }}
       >
+        {contaAtual.offline && (
+          <div className="card alerta-conta" style={{ boxShadow: "inset 3px 0 0 var(--c-muted)" }}>
+            <strong>{t("Sem conexão — publicar e puxar estão bloqueados.")}</strong>
+            <p style={{ marginBottom: 0 }}>{t("O resto funciona: o vault é este disco.")}</p>
+          </div>
+        )}
+
+        {contaAtual.contaAnterior && (
+          <div className="card alerta-conta">
+            <strong>{tf("Este vault era da conta {conta}.", { conta: contaAtual.contaAnterior })}</strong>
+            <p>
+              {t("Publicar agora manda o conteúdo desta pasta para")} <code>{contaAtual.email}</code>.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                className="btn"
+                onClick={async () => {
+                  await api.account.assumirVault(contaAtual.email);
+                  setConta({ ...contaAtual, contaAnterior: undefined });
+                }}
+              >
+                {t("Entendi, este vault é desta conta")}
+              </button>
+              <button
+                className="btn"
+                onClick={async () => {
+                  await api.account.logout();
+                  setConta(false);
+                }}
+              >
+                {tf("Sair e entrar com {conta}", { conta: contaAtual.contaAnterior })}
+              </button>
+            </div>
+          </div>
+        )}
+
         {aba?.tipo === "home" && (
           <Home
             key={refreshKey}
@@ -612,52 +857,73 @@ export default function App() {
           />
         )}
 
-        {aba?.tipo === "terminal" && <TerminalPanel />}
-
         {aba?.tipo === "config" && (
           <Settings vaultPath={vaultPath} onTrocouVault={() => window.location.reload()} />
         )}
 
-        {aba?.tipo === "perfil" && <Profile conta={contaAtual} onSaiu={() => setConta(false)} />}
+        {aba?.tipo === "perfil" && (
+          <Profile conta={contaAtual} onSaiu={() => setConta(false)} onConta={setConta} />
+        )}
+
+        {aba?.tipo === "glossario" && <Glossario onAbrir={abrir} />}
 
         {aba?.tipo === "arquivo" && <Arquivo rel={aba.rel} />}
 
         {/* Painel unico e sempre montado: trocar de aba nao pode desmontar a
             sessao — era assim que o log e o campo do AGUARDANDO RESPOSTA
-            sumiam justo depois de "Gerar pagina". */}
-        <SessionPanel onStateChange={setBusy} />
+            sumiam justo depois de "Gerar pagina".
 
+            Na leitura ele fica ESCONDIDO, nao desmontado: a aba de leitura
+            existe para dar a tela ao texto, e uma faixa "sessao ociosa" embaixo
+            de uma aula e ruido. Escondido por CSS, o transcript continua vivo e
+            o "aguardando voce" nao se perde enquanto voce le. */}
         {aba?.tipo === "comandos" && <PublishPanel refreshKey={refreshKey} />}
       </div>
     </main>
   );
 
   return (
-    <div
-      style={{
-        height: "100%",
-        display: "grid",
-        gridTemplateColumns:
-          lado === "esq"
-            ? `44px ${larguraMenu}px 5px 1fr`
-            : `1fr 5px ${larguraMenu}px 44px`,
-      }}
-    >
-      {lado === "esq" ? (
-        <>
-          {railBotoes}
-          {lateral}
-          {divisoria}
-          {principal}
-        </>
-      ) : (
-        <>
-          {principal}
-          {divisoria}
-          {lateral}
-          {railBotoes}
-        </>
-      )}
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <TitleBar />
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "grid",
+          gridTemplateColumns:
+            lado === "esq"
+              ? `44px ${larguraMenu}px 5px 1fr`
+              : `1fr 5px ${larguraMenu}px 44px`,
+        }}
+      >
+        {dialogo}
+        {abrindoRapido && (
+          <SeletorPagina
+            titulo={t("Abrir página")}
+            aviso=""
+            onFechar={() => setAbrindoRapido(false)}
+            onEscolher={(a) => {
+              setAbrindoRapido(false);
+              abrir(a.rel);
+            }}
+          />
+        )}
+        {lado === "esq" ? (
+          <>
+            {railBotoes}
+            {lateral}
+            {divisoria}
+            {principal}
+          </>
+        ) : (
+          <>
+            {principal}
+            {divisoria}
+            {lateral}
+            {railBotoes}
+          </>
+        )}
+      </div>
     </div>
   );
 }

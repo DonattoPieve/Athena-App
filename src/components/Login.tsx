@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { api, mensagemDeErro, type Account } from "../lib/api";
+import { IconGitHub, IconGoogle, IconOlho } from "./icons";
+import { t } from "../lib/i18n";
 
 /**
  * Porta de entrada do app. Autentica no MESMO Supabase do site: e-mail e senha
@@ -8,10 +10,6 @@ import { api, mensagemDeErro, type Account } from "../lib/api";
  *
  * Vem depois de escolher o vault, não antes: a URL e a chave publicável saem
  * do `athena-web/.env.local`, que mora dentro do vault.
- *
- * A senha é usada uma vez e descartada — o que fica em disco é o token de
- * renovação. `SERVICE_ROLE` não existe no projeto: o app escreve como usuário
- * normal e apanha do RLS igual a todo mundo.
  */
 export function Login({
   vaultPath,
@@ -25,18 +23,38 @@ export function Login({
   const [modo, setModo] = useState<"entrar" | "criar">("entrar");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
+  const [email2, setEmail2] = useState("");
   const [senha, setSenha] = useState("");
+  const [senha2, setSenha2] = useState("");
+  const [ver, setVer] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [ocupado, setOcupado] = useState(false);
+  const [ocupado, setOcupado] = useState<null | "form" | "github" | "google">(null);
 
-  const pronto = email.trim().length > 3 && senha.length >= 6;
+  const criando = modo === "criar";
+  const emailBate = !criando || email.trim().toLowerCase() === email2.trim().toLowerCase();
+  const senhaBate = !criando || senha === senha2;
+  /**
+   * De propósito NÃO checa `ocupado` inteiro, só o envio do formulário.
+   *
+   * Esperar o provedor não pode travar o e-mail e senha: fechar a aba do
+   * navegador não avisa o app, então o `await` do OAuth ficava pendurado até o
+   * timeout de 3 minutos e, nesse tempo, não dava para entrar de outro jeito.
+   */
+  const pronto =
+    email.trim().length > 3 && senha.length >= 6 && emailBate && senhaBate && ocupado !== "form";
 
-  async function enviar() {
-    if (!pronto || ocupado) return;
+  function limpar() {
     setErro(null);
     setAviso(null);
-    setOcupado(true);
+  }
+
+  async function enviar() {
+    if (!pronto) return;
+    // Voltar para o e-mail é desistir do provedor — libera a porta local.
+    if (ocupado) await api.account.oauthCancel().catch(() => {});
+    limpar();
+    setOcupado("form");
     try {
       if (modo === "entrar") {
         onEntrou(await api.account.login(email.trim(), senha));
@@ -45,16 +63,57 @@ export function Login({
         if (conta) onEntrou(conta);
         else
           setAviso(
-            "Conta criada. Confirme o e-mail que o Supabase enviou e depois entre por aqui.",
+            t("Conta criada. Confirme o e-mail que o Supabase enviou e depois entre por aqui."),
           );
       }
     } catch (e) {
       setErro(mensagemDeErro(e));
     } finally {
-      setOcupado(false);
+      setOcupado(null);
       setSenha("");
+      setSenha2("");
     }
   }
+
+  /**
+   * O login abre no navegador do sistema e volta num servidor local. Enquanto
+   * isso a janela fica esperando — daí o texto de "abri o navegador", senão
+   * parece que o botão não fez nada.
+   */
+  async function porProvedor(provider: "github" | "google") {
+    limpar();
+    setOcupado(provider);
+    setAviso(t("Abri o navegador. Termine o login por lá — ou use o e-mail aqui embaixo."));
+    try {
+      onEntrou(await api.account.oauth(provider));
+    } catch (e) {
+      const msg = mensagemDeErro(e);
+      // Cancelar é escolha da pessoa, não defeito: não vira mensagem vermelha.
+      if (!msg.includes("cancelado")) setErro(msg);
+      setAviso(null);
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function desistirDoProvedor() {
+    await api.account.oauthCancel().catch(() => {});
+    setOcupado(null);
+    setAviso(null);
+  }
+
+  const esperandoProvedor = ocupado === "github" || ocupado === "google";
+
+  const olho = (
+    <button
+      type="button"
+      className="olho"
+      title={ver ? t("Esconder a senha") : t("Mostrar a senha")}
+      onClick={() => setVer((v) => !v)}
+    >
+      <IconOlho aberto={ver} />
+    </button>
+  );
 
   return (
     <div className="login-tela">
@@ -65,58 +124,127 @@ export function Login({
             <span style={{ color: "var(--c-accent)" }}>Athena</span>
           </h1>
           <p style={{ margin: "0 0 20px", fontSize: 12.5, color: "var(--c-muted)" }}>
-            {modo === "entrar"
-              ? "Entre com a conta em que o conteúdo é publicado."
-              : "Crie a conta que vai ser dona do seu conteúdo."}
+            {criando
+              ? t("Crie a conta que vai ser dona do seu conteúdo.")
+              : t("Entre com a conta em que o conteúdo é publicado.")}
           </p>
 
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn provedor"
+              disabled={!!ocupado}
+              onClick={() => porProvedor("google")}
+            >
+              <IconGoogle />
+              {ocupado === "google" ? t("aguardando…") : "Google"}
+            </button>
+            <button
+              className="btn provedor"
+              disabled={!!ocupado}
+              onClick={() => porProvedor("github")}
+            >
+              <IconGitHub />
+              {ocupado === "github" ? t("aguardando…") : "GitHub"}
+            </button>
+          </div>
+
+          <div className="ou">
+            <span>{t("ou com e-mail")}</span>
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {modo === "criar" && (
+            {criando && (
               <input
                 className="field"
-                placeholder="Como quer ser chamado"
+                placeholder={t("Como quer ser chamado")}
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
               />
             )}
+
             <input
               className="field"
-              placeholder="E-mail"
+              placeholder={t("E-mail")}
               autoComplete="username"
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && enviar()}
             />
-            <input
-              className="field"
-              type="password"
-              placeholder={modo === "criar" ? "Senha (mínimo 6)" : "Senha"}
-              autoComplete={modo === "criar" ? "new-password" : "current-password"}
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && enviar()}
-            />
+            {criando && (
+              <input
+                className="field"
+                placeholder={t("Confirme o e-mail")}
+                autoComplete="off"
+                value={email2}
+                onChange={(e) => setEmail2(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && enviar()}
+              />
+            )}
 
-            <button className="btn btn-primary" disabled={!pronto || ocupado} onClick={enviar}>
-              {ocupado ? "…" : modo === "entrar" ? "Entrar" : "Criar conta"}
+            <div className="campo-senha">
+              <input
+                className="field"
+                type={ver ? "text" : "password"}
+                placeholder={criando ? t("Senha (mínimo 6)") : t("Senha")}
+                autoComplete={criando ? "new-password" : "current-password"}
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && enviar()}
+              />
+              {olho}
+            </div>
+            {criando && (
+              <div className="campo-senha">
+                <input
+                  className="field"
+                  type={ver ? "text" : "password"}
+                  placeholder={t("Confirme a senha")}
+                  autoComplete="new-password"
+                  value={senha2}
+                  onChange={(e) => setSenha2(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && enviar()}
+                />
+                {olho}
+              </div>
+            )}
+
+            {criando && email2 && !emailBate && (
+              <p className="conferir">{t("Os dois e-mails não batem.")}</p>
+            )}
+            {criando && senha2 && !senhaBate && (
+              <p className="conferir">{t("As duas senhas não batem.")}</p>
+            )}
+
+            <button className="btn btn-primary" disabled={!pronto} onClick={enviar}>
+              {ocupado === "form" ? "…" : criando ? t("Criar conta") : t("Entrar")}
             </button>
           </div>
 
           {erro && <p style={{ margin: "12px 0 0", color: "#e24b4a", fontSize: 12 }}>{erro}</p>}
-          {aviso && <p style={{ margin: "12px 0 0", color: "#1d9e75", fontSize: 12 }}>{aviso}</p>}
+          {aviso && (
+            <p style={{ margin: "12px 0 0", color: "#1d9e75", fontSize: 12 }}>
+              {aviso}
+              {esperandoProvedor && (
+                <button className="link-btn" style={{ marginLeft: 8 }} onClick={desistirDoProvedor}>
+                  {t("cancelar")}
+                </button>
+              )}
+            </p>
+          )}
 
           <p style={{ margin: "16px 0 0", fontSize: 11.5, color: "var(--c-muted)" }}>
-            {modo === "entrar" ? "Não tem conta? " : "Já tem conta? "}
+            {criando ? t("Já tem conta? ") : t("Não tem conta? ")}
             <button
               className="link-btn"
               onClick={() => {
-                setModo(modo === "entrar" ? "criar" : "entrar");
-                setErro(null);
-                setAviso(null);
+                setModo(criando ? "entrar" : "criar");
+                setEmail2("");
+                setSenha2("");
+                limpar();
               }}
             >
-              {modo === "entrar" ? "criar uma" : "entrar"}
+              {criando ? t("entrar") : t("criar uma")}
             </button>
           </p>
 
@@ -125,12 +253,8 @@ export function Login({
           <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>
             Vault: <code>{vaultPath}</code>
             <button className="link-btn" style={{ marginLeft: 8 }} onClick={onTrocarVault}>
-              trocar
+              {t("trocar")}
             </button>
-          </p>
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--c-muted)" }}>
-            A senha não é gravada. Fica só o token de renovação em{" "}
-            <code>.athena/session.json</code>.
           </p>
         </div>
       </div>

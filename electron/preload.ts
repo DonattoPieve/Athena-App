@@ -17,6 +17,10 @@ const api = {
   config: {
     setClaudeBin: (bin: string) => ipcRenderer.invoke("config:setClaudeBin", bin),
   },
+  win: {
+    close: () => ipcRenderer.invoke("win:close"),
+    toggleMaximize: () => ipcRenderer.invoke("win:toggleMaximize"),
+  },
   fs: {
     tree: (scope: "raw" | "wiki") => ipcRenderer.invoke("fs:tree", scope),
     read: (rel: string) => ipcRenderer.invoke("fs:read", rel),
@@ -38,6 +42,8 @@ const api = {
     home: () => ipcRenderer.invoke("fs:home"),
     resolveLink: (slug: string) => ipcRenderer.invoke("fs:resolveLink", slug),
     openUrl: (url: string) => ipcRenderer.invoke("fs:openUrl", url),
+    glossario: () => ipcRenderer.invoke("fs:glossario"),
+    buscar: (termo: string) => ipcRenderer.invoke("fs:buscar", termo),
   },
   clipboard: {
     read: () => ipcRenderer.invoke("clipboard:read"),
@@ -56,21 +62,12 @@ const api = {
       ipcRenderer.invoke("session:start", cmd, code, lesson),
     reply: (text: string) => ipcRenderer.invoke("session:reply", text),
     cancel: () => ipcRenderer.invoke("session:cancel"),
+    clear: () => ipcRenderer.invoke("session:clear"),
     snapshot: () => ipcRenderer.invoke("session:snapshot"),
     onEvent: (cb: (e: any) => void) => {
       const handler = (_: unknown, e: any) => cb(e);
       ipcRenderer.on("session:event", handler);
       return () => ipcRenderer.removeListener("session:event", handler);
-    },
-  },
-  term: {
-    run: (comando: string) => ipcRenderer.invoke("term:run", comando),
-    cancel: () => ipcRenderer.invoke("term:cancel"),
-    cwd: () => ipcRenderer.invoke("term:cwd"),
-    onEvent: (cb: (e: any) => void) => {
-      const handler = (_: unknown, e: any) => cb(e);
-      ipcRenderer.on("term:event", handler);
-      return () => ipcRenderer.removeListener("term:event", handler);
     },
   },
   account: {
@@ -80,6 +77,11 @@ const api = {
     logout: () => ipcRenderer.invoke("account:logout"),
     signUp: (email: string, senha: string, nome: string) =>
       ipcRenderer.invoke("account:signUp", email, senha, nome),
+    oauth: (provider: "github" | "google") => ipcRenderer.invoke("account:oauth", provider),
+    oauthCancel: () => ipcRenderer.invoke("account:oauthCancel"),
+    avatarPick: () => ipcRenderer.invoke("account:avatarPick"),
+    avatarRemove: () => ipcRenderer.invoke("account:avatarRemove"),
+    assumirVault: (email: string) => ipcRenderer.invoke("account:assumirVault", email),
     update: (campos: { email?: string; password?: string; nome?: string }) =>
       ipcRenderer.invoke("account:update", campos),
   },
@@ -102,6 +104,7 @@ const api = {
   },
   claude: {
     openLogin: () => ipcRenderer.invoke("claude:openLogin"),
+    whoami: () => ipcRenderer.invoke("claude:whoami"),
   },
 };
 

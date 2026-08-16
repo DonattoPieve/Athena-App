@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!--
+    Marca do Athena. Um "A" geometrico, nao um desenho: aos 16px na barra de
+    tarefas o que sobra e a silhueta, e silhueta de coruja vira borrao. As duas
+    pernas e a travessa continuam legiveis em qualquer tamanho.
+
+    Este arquivo e a fonte. icon.png e icon.ico ao lado sao gerados dele e estao
+    versionados de proposito — o build nao depende de rasterizador instalado.
+    Para regerar depois de mexer aqui:
+      pip install cairosvg
+      python -c "import cairosvg,io;from PIL import Image;p=cairosvg.svg2png(url='build/icon.svg',output_width=512,output_height=512);open('build/icon.png','wb').write(p);Image.open(io.BytesIO(p)).save('build/icon.ico',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+  -->
+  <defs>
+    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17131F"/>
+      <stop offset="1" stop-color="#0A0A0C"/>
+    </linearGradient>
+    <!--
+      userSpaceOnUse de proposito: com o padrao (objectBoundingBox) a travessa
+      do A tem altura zero, o gradiente fica degenerado e o rasterizador
+      simplesmente nao pinta a barra. Foi assim que o icone virou um "lambda".
+    -->
+    <linearGradient id="letra" gradientUnits="userSpaceOnUse"
+                    x1="140" y1="100" x2="380" y2="410">
+      <stop offset="0" stop-color="#C4A5FF"/>
+      <stop offset="0.55" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#6D3BE0"/>
+    </linearGradient>
+    <radialGradient id="brilho" cx="0.5" cy="0.28" r="0.62">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="114" fill="url(#fundo)"/>
+  <rect width="512" height="512" rx="114" fill="url(#brilho)"/>
+  <rect x="3" y="3" width="506" height="506" rx="111" fill="none"
+        stroke="#8B5CF6" stroke-opacity="0.22" stroke-width="6"/>
+
+  <g fill="none" stroke="url(#letra)" stroke-width="54"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M148 396 L256 116 L364 396"/>
+    <path d="M198 308 L314 308"/>
+  </g>
+</svg>

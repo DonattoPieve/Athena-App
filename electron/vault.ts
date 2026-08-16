@@ -48,7 +48,6 @@ export type HomeData = {
   logConflitado: boolean;
 };
 
-
 export type SubjectRef = { code: string; name: string; folder: string };
 
 export type Target = {
@@ -170,7 +169,8 @@ export class Vault {
       });
   }
 
-  private async listDir(rel: string): Promise<string[]> {
+  /** Publico porque `biblioteca.ts` varre a wiki para o glossario. */
+  async listDir(rel: string): Promise<string[]> {
     try {
       return await fs.readdir(this.resolve(rel));
     } catch {
@@ -420,7 +420,12 @@ export class Vault {
         if (!linha.startsWith("- ") || !data) continue;
         const removido = /^-\s+removido:/.test(linha);
         const slug = /`([^`]+)`/.exec(linha)?.[1] ?? (removido ? linha.split(":")[1]?.trim() : null);
-        eventos.push({ data, texto: linha.slice(2).trim(), slug: slug ?? null, removido });
+        eventos.push({
+          data,
+          texto: linha.slice(2).trim(),
+          slug: slug ?? null,
+          removido,
+        });
       }
     } catch {
       // vault sem log.md ainda e caso normal
@@ -448,6 +453,78 @@ export class Vault {
   }
 
   /** Le o .ingest-status da RAIZ do vault (nunca relativo ao cwd). */
+  /**
+   * Guarda uma copia antes de um comando destruir o arquivo.
+   *
+   * `redo` reescreve a pagina do zero e `delete` a apaga. Os dois sao
+   * legitimos e os dois ja perderam edicao feita a mao. `.athena/lixeira/`
+   * custa alguns KB e transforma "se perdeu" em "esta ali".
+   *
+   * Nao e versionamento: e o ultimo estado antes de cada comando destrutivo,
+   * com data no nome para nao sobrescrever a copia anterior.
+   */
+  async arquivar(rel: string): Promise<string | null> {
+    const origem = this.resolve(rel);
+    try {
+      const conteudo = await fs.readFile(origem, "utf8");
+      const carimbo = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const nome = `${carimbo}__${rel.split("/").join("__")}`;
+      const destino = path.join(this.root, ".athena", "lixeira", nome);
+      await fs.mkdir(path.dirname(destino), { recursive: true });
+      await fs.writeFile(destino, conteudo, "utf8");
+      return path.posix.join(".athena/lixeira", nome);
+    } catch {
+      // Arquivo inexistente e o caso normal do ingest: nao ha o que guardar.
+      return null;
+    }
+  }
+
+  /**
+   * Busca DENTRO dos arquivos.
+   *
+   * A busca por nome ja existia e resolve quando voce lembra do nome. Quando a
+   * pergunta e "onde eu falei de ponteiro?", o nome nao ajuda — o texto ajuda.
+   */
+  async buscarConteudo(
+    termo: string,
+    limite = 80,
+  ): Promise<{ rel: string; linha: number; trecho: string }[]> {
+    const alvo = termo.trim().toLowerCase();
+    if (alvo.length < 2) return [];
+
+    const achados: { rel: string; linha: number; trecho: string }[] = [];
+    const visitar = async (base: string) => {
+      for (const materia of await this.listDir(base)) {
+        const dir = path.posix.join(base, materia);
+        // Um nivel de pasta e a forma do vault; mais que isso vira varredura.
+        const entradas = await this.listDir(dir);
+        const arquivos = entradas.filter((f) => /\.(md|txt)$/i.test(f));
+        // A pasta pode ser o proprio arquivo (raw/Ideias/Athena.md).
+        if (/\.(md|txt)$/i.test(materia)) arquivos.push("");
+        for (const f of arquivos) {
+          if (achados.length >= limite) return;
+          const rel = f ? path.posix.join(dir, f) : path.posix.join(base, materia);
+          let texto = "";
+          try {
+            texto = await this.read(rel);
+          } catch {
+            continue;
+          }
+          const linhas = texto.split("\n");
+          for (let i = 0; i < linhas.length; i++) {
+            if (!linhas[i].toLowerCase().includes(alvo)) continue;
+            achados.push({ rel, linha: i + 1, trecho: linhas[i].trim().slice(0, 200) });
+            break; // uma linha por arquivo: a lista e para navegar, nao para ler
+          }
+        }
+      }
+    };
+    await visitar("wiki/subjects");
+    await visitar("raw/subjects");
+    await visitar("raw");
+    return achados.slice(0, limite);
+  }
+
   async ingestStatus(): Promise<"OK" | "FAIL" | "NONE"> {
     try {
       const raw = await fs.readFile(this.resolve(".ingest-status"), "utf8");

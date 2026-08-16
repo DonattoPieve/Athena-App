@@ -6,6 +6,7 @@ import { athenaExtensions, toEditor, toMarkdown } from "../lib/markdown";
 import { Toolbar } from "./Toolbar";
 import { LinkPicker } from "./LinkPicker";
 import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
+import { t } from "../lib/i18n";
 
 /** Extensao do arquivo a partir do MIME da area de transferencia. */
 function extDe(mime: string): string {
@@ -57,7 +58,7 @@ export function MarkdownEditor({
     const nome = await api.fs.pasteImage(baseRef.current, extDe(file.type), data);
     if (view.isDestroyed) return;
     const tipo = view.state.schema.nodes.image;
-    if (!tipo) throw new Error("Extensão de imagem ausente em athenaExtensions().");
+    if (!tipo) throw new Error(t("Extensão de imagem ausente em athenaExtensions()."));
     const node = tipo.create({
       src: `athena://file/raw/attachments/${encodeURIComponent(nome)}`,
       alt: nome,
@@ -116,10 +117,10 @@ export function MarkdownEditor({
     const e = editor;
     const temSelecao = !!e && !e.state.selection.empty;
     return [
-      { label: "Recortar", hint: "Ctrl+X", disabled: !temSelecao, onClick: () => document.execCommand("cut") },
-      { label: "Copiar", hint: "Ctrl+C", disabled: !temSelecao, onClick: () => document.execCommand("copy") },
+      { label: t("Recortar"), hint: "Ctrl+X", disabled: !temSelecao, onClick: () => document.execCommand("cut") },
+      { label: t("Copiar"), hint: "Ctrl+C", disabled: !temSelecao, onClick: () => document.execCommand("copy") },
       {
-        label: "Colar",
+        label: t("Colar"),
         hint: "Ctrl+V",
         onClick: async () => {
           const texto = await api.clipboard.read();
@@ -127,13 +128,13 @@ export function MarkdownEditor({
         },
       },
       { kind: "sep" },
-      { label: "Negrito", hint: "Ctrl+B", disabled: !temSelecao, onClick: () => e?.chain().focus().toggleBold().run() },
-      { label: "Itálico", hint: "Ctrl+I", disabled: !temSelecao, onClick: () => e?.chain().focus().toggleItalic().run() },
-      { label: "Código", disabled: !temSelecao, onClick: () => e?.chain().focus().toggleCode().run() },
+      { label: t("Negrito"), hint: "Ctrl+B", disabled: !temSelecao, onClick: () => e?.chain().focus().toggleBold().run() },
+      { label: t("Itálico"), hint: "Ctrl+I", disabled: !temSelecao, onClick: () => e?.chain().focus().toggleItalic().run() },
+      { label: t("Código"), disabled: !temSelecao, onClick: () => e?.chain().focus().toggleCode().run() },
       { kind: "sep" },
-      { label: "Link para aula…", hint: "[[ ]]", onClick: () => setLinking(true) },
+      { label: t("Link para aula…"), hint: "[[ ]]", onClick: () => setLinking(true) },
       {
-        label: "Tabela 3×3",
+        label: t("Tabela 3×3"),
         onClick: () => e?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
       },
     ];
@@ -156,7 +157,7 @@ export function MarkdownEditor({
           style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 11 }}
           data-active={raw}
           onClick={alternarModo}
-          title="Ver e editar o markdown exatamente como vai para o disco"
+          title={t("Ver e editar o markdown exatamente como vai para o disco")}
         >
           markdown
         </button>
