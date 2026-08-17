@@ -28,6 +28,13 @@ const api = {
   },
   app: {
     versao: () => ipcRenderer.invoke("app:versao"),
+    atualizacao: () => ipcRenderer.invoke("app:atualizacao"),
+    instalarAtualizacao: () => ipcRenderer.invoke("app:instalarAtualizacao"),
+    onAtualizacao: (cb: (e: unknown) => void) => {
+      const handler = (_: unknown, e: unknown) => cb(e);
+      ipcRenderer.on("app:atualizacao", handler);
+      return () => ipcRenderer.removeListener("app:atualizacao", handler);
+    },
   },
   config: {
     setClaudeBin: (bin: string) => ipcRenderer.invoke("config:setClaudeBin", bin),

@@ -108,6 +108,18 @@ export type Prefs = {
 /** Resultado de `athena publish` / `athena pull` rodados pelo app. */
 export type ScriptResult = { ok: boolean; output: string; canForce: boolean };
 
+/**
+ * Estado da atualização automática — ver electron/atualizacao.ts.
+ *
+ * "erro" não chega à interface de propósito: falha de rede aqui não é algo que
+ * a pessoa possa resolver, e o updater volta a tentar sozinho.
+ */
+export type EstadoAtualizacao =
+  | { fase: "ocioso" }
+  | { fase: "baixando"; pct: number }
+  | { fase: "pronta"; versao: string }
+  | { fase: "erro"; mensagem: string };
+
 /** Resultado de `vault.baixarTudo()` — ver electron/bootstrap.ts. */
 export type ResultadoBootstrap = {
   criados: number;
@@ -138,7 +150,13 @@ type AthenaBridge = {
     /** Progresso linha a linha de baixarTudo(), enquanto ele roda. */
     onLinhaBootstrap(cb: (linha: string) => void): () => void;
   };
-  app: { versao(): Promise<string> };
+  app: {
+    versao(): Promise<string>;
+    atualizacao(): Promise<EstadoAtualizacao>;
+    /** Fecha e instala. Recusa com o Claude Code rodando. */
+    instalarAtualizacao(): Promise<boolean>;
+    onAtualizacao(cb: (e: EstadoAtualizacao) => void): () => void;
+  };
   config: {
     setClaudeBin(bin: string): Promise<boolean>;
     get(): Promise<Prefs>;

@@ -21,6 +21,7 @@ import * as publish from "./publish";
 import * as biblioteca from "./biblioteca";
 import * as usage from "./usage";
 import * as bootstrap from "./bootstrap";
+import { iniciarAtualizador } from "./atualizacao";
 import { getPrefs, setPrefs, zipPastaStore, type Prefs, type PrefsSalvas } from "./prefs";
 
 type Config = {
@@ -894,6 +895,17 @@ app.whenReady().then(() => {
   registerIpc();
   registerProtocol();
   createWindow();
+  // Depois da janela: o updater fala com o renderer, e o primeiro estado
+  // precisa de alguem para ouvir.
+  iniciarAtualizador({
+    send,
+    // Nunca reiniciar no meio de um ingest — ver atualizacao.ts.
+    ocupado: () => runner?.busy ?? false,
+    log: (linha) => {
+      runner?.log(linha);
+      console.log(linha);
+    },
+  });
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

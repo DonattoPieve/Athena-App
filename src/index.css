@@ -1779,6 +1779,20 @@ button.leitura-material:hover {
   font-size: 10.5px;
   color: var(--c-muted);
 }
+.tc-atualizacao {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--c-border);
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.tc-atualizacao .link-btn { text-align: left; }
+.tc-atualizacao-erro { color: var(--c-aviso, #e2a44b); line-height: 1.35; }
+
 .taskcenter-icones { display: flex; gap: 2px; }
 .taskcenter-icones button {
   display: grid;

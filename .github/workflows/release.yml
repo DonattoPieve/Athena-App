@@ -1,0 +1,62 @@
+name: release
+
+# Cria a versão nova quando você empurra uma tag `v1.2.3`.
+#
+# Por que tag e não todo push: build de instalador leva minutos e gera um
+# arquivo de 80 MB. Amarrar isso a cada commit encheria o Releases de lixo e
+# faria o app instalado se atualizar para código pela metade. A tag é o gesto
+# explícito de "esta é uma versão".
+#
+# A tag tem que combinar com o `version` do package.json — é esse número que o
+# `latest.yml` publica e que o app instalado compara. Se estiverem diferentes, o
+# passo de conferência abaixo quebra o build antes de publicar nada.
+#
+# Para lançar:
+#   npm version patch      # sobe o package.json e cria a tag
+#   git push --follow-tags
+
+on:
+  push:
+    tags: ["v*"]
+  # Deixa disparar à mão pelo site do GitHub, para quando a tag já existe.
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      # O electron-builder usa o GITHUB_TOKEN para criar o Release e subir o .exe.
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: A tag combina com o package.json?
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "Tag $GITHUB_REF_NAME nao combina com a versao $pkg do package.json."
+            echo "Use 'npm version <patch|minor|major>', que muda os dois de uma vez."
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Typecheck e testes
+        run: |
+          npm run typecheck
+          npm run test:md
+          npm run test:progresso
+          npm run test:worker
+
+      - name: Instalador e publicação
+        run: npm run dist:publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

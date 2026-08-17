@@ -150,7 +150,8 @@ await pagina.addInitScript(`
           refs: [{ titulo: "Introducao a linguagem C", rel: "wiki/programacao/introducao-a-linguagem-c.md" }] },
       ]),
     },
-    app: { versao: async () => "1.0.0" },
+    app: { versao: async () => "1.0.0", atualizacao: async () => ({ fase: "pronta", versao: "1.0.1" }),
+           instalarAtualizacao: async () => true, onAtualizacao: nada },
     clipboard: { read: async () => "", write: async () => true },
     account: {
       status: async () => ({ id: "1", name: "Teste", email: "donatto@gec.inatel.br" }),
