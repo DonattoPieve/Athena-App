@@ -88,7 +88,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "Athena-Setup-${version}.${ext}"
+      "artifactName": "athena-setup.${ext}"
     },
     "nsis": {
       "oneClick": false,
