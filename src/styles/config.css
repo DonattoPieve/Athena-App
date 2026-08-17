@@ -1,0 +1,347 @@
+/**
+ * Estilos das Configurações e do Perfil, num arquivo só porque os dois telas
+ * compartilham quase tudo: abas horizontais, toggles, seletores e a dupla
+ * tema/paleta. Prefixo `cfg-` para não colidir com nada de src/index.css.
+ *
+ * Cores e raios sempre em var(--c-*) / var(--r-*): existem 7 paletas × 2
+ * temas (ver [data-palette] em index.css), e um hex fixo aqui ficaria errado
+ * em pelo menos 13 das 14 combinações. As exceções (vermelho de erro/remoção,
+ * âmbar de aviso, verde de sucesso) usam os MESMOS hex fixos que o resto do
+ * app já usa em index.css — não são cor de marca, são cor de estado, iguais
+ * nas 14 combinações de propósito.
+ */
+
+/* ---- abas horizontais ---- */
+.cfg-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--c-border);
+  flex: 0 0 auto;
+  /* Quebra de linha em vez de rolagem lateral.
+     Rolando, a barra aparecia como um risco cinza abaixo de "Sobre" (parecendo
+     controle quebrado) e ainda cortava a última aba pela metade. Em duas
+     linhas, as oito abas ficam inteiras e sempre visíveis. */
+  flex-wrap: wrap;
+}
+.cfg-tab {
+  position: relative;
+  padding: 9px 13px;
+  border: none;
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 140ms;
+}
+.cfg-tab:hover {
+  color: var(--c-text);
+}
+/* Aba ativa: texto roxo (a cor de destaque, que também pode ser outra paleta)
+   + linha embaixo — o mesmo par de sinais que `.tab` já usa noutro lugar do
+   app, para a pessoa não ter que aprender um padrão novo aqui. */
+.cfg-tab[data-active="true"] {
+  color: var(--c-accent);
+  font-weight: 500;
+}
+.cfg-tab[data-active="true"]::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--c-accent);
+}
+
+.cfg-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 4px;
+  /* Tamanho de fonte das Configuracoes: preferencia real (Prefs.tamanhoFonte),
+     nao decorativa — aplicada ao <html> em usePrefs() e usada aqui como
+     pre-visualizacao imediata da propria tela. */
+  font-size: var(--cfg-font-size, 13px);
+}
+
+.cfg-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cfg-section-titulo {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.cfg-section-dica {
+  margin: 0;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+/* Densidade da interface (Prefs.densidade): efeito real e visivel nas
+   proprias telas de Configuracoes/Perfil, unico lugar que este arquivo pode
+   tocar — o resto do app fica para quem consumir a preferencia depois. */
+[data-densidade="compacta"] .cfg-panel { gap: 10px; }
+[data-densidade="compacta"] .cfg-row { padding: 5px 0; }
+[data-densidade="compacta"] .cfg-section { gap: 5px; }
+[data-densidade="confortavel"] .cfg-panel { gap: 28px; }
+[data-densidade="confortavel"] .cfg-row { padding: 13px 0; }
+[data-densidade="confortavel"] .cfg-section { gap: 12px; }
+
+/* ---- linha rotulo + controle (selects e toggles) ---- */
+.cfg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--c-border);
+}
+.cfg-row:last-child {
+  border-bottom: none;
+}
+.cfg-row-rotulo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cfg-row-titulo {
+  font-size: 1em;
+  color: var(--c-text);
+}
+.cfg-row-dica {
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+.cfg-select {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-border);
+  background: var(--c-card);
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cfg-select:focus {
+  border-color: color-mix(in srgb, var(--c-accent) 60%, transparent);
+  outline: none;
+}
+
+/* Segmento tipo [12][14][16][18][20] — mesmo padrao visual do .btn com
+   data-active que o resto do app usa para Escuro/Claro e raw/wiki. */
+.cfg-segmento {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ---- toggle (checkbox escondido + trilho desenhado) ---- */
+.cfg-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  cursor: pointer;
+}
+.cfg-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.cfg-switch-trilho {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--c-border);
+  transition: background-color 160ms;
+}
+.cfg-switch-trilho::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--c-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 160ms;
+}
+.cfg-switch input:checked + .cfg-switch-trilho {
+  background: var(--c-accent);
+}
+.cfg-switch input:checked + .cfg-switch-trilho::after {
+  transform: translateX(14px);
+}
+.cfg-switch input:focus-visible + .cfg-switch-trilho {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 25%, transparent);
+}
+.cfg-switch input:disabled + .cfg-switch-trilho {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- paletas (Aparência) ---- */
+.cfg-paletas {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cfg-paleta {
+  width: 34px;
+  height: 26px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-border);
+  background: var(--c-accent);
+  cursor: pointer;
+}
+.cfg-paleta[data-active="true"] {
+  border: 2px solid var(--c-text);
+}
+
+/* ---- avatar do Perfil: anel roxo + botão de câmera sobreposto ---- */
+.cfg-avatar-linha {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.cfg-avatar-bloco {
+  position: relative;
+  flex: 0 0 auto;
+  width: fit-content;
+}
+.cfg-avatar-anel {
+  display: inline-flex;
+  padding: 3px;
+  border: 2px solid var(--c-accent);
+  border-radius: 999px;
+}
+.cfg-avatar-camera {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  border: 2px solid var(--c-card);
+  background: var(--c-accent);
+  color: var(--c-bg);
+  cursor: pointer;
+}
+.cfg-avatar-camera:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-accent) 85%, black);
+}
+.cfg-avatar-camera:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Sobre ---- */
+.cfg-sobre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 44px 16px;
+  text-align: center;
+}
+.cfg-sobre-logo {
+  color: var(--c-accent);
+  margin-bottom: 6px;
+}
+.cfg-sobre-nome {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--c-text);
+}
+.cfg-sobre-sub {
+  font-size: 12.5px;
+  color: var(--c-muted);
+}
+.cfg-sobre-versao {
+  margin-top: 14px;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+/* ---- Atividade (timeline vertical agrupada por dia) ---- */
+.cfg-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.cfg-timeline-dia-titulo {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: capitalize;
+  color: var(--c-muted);
+}
+.cfg-timeline-lista {
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--c-border);
+  margin-left: 6px;
+  padding-left: 18px;
+}
+.cfg-timeline-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 0;
+}
+.cfg-timeline-icone {
+  position: absolute;
+  left: -25px;
+  top: 10px;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--c-card);
+  border: 2px solid var(--c-accent);
+  color: var(--c-accent);
+}
+/* Removido = vermelho de estado (mesmo hex de erro do resto do app), não faz
+   parte da paleta de marca — por isso é o único hex fixo aqui. */
+.cfg-timeline-icone[data-tipo="removido"] {
+  border-color: #e24b4a;
+  color: #e24b4a;
+}
+.cfg-timeline-icone[data-tipo="reprocessado"] {
+  border-color: var(--c-muted);
+  color: var(--c-muted);
+}
+.cfg-timeline-titulo {
+  font-size: 1em;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cfg-timeline-arquivo {
+  font-size: 11px;
+  color: var(--c-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

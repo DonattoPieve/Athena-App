@@ -1,6 +1,6 @@
 {
   "name": "athena-app",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Cliente desktop do vault Athena — ingest, review, delete e publish sem terminal",
   "main": "dist/electron/main.js",
@@ -13,9 +13,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "test:md": "node scripts/md-roundtrip.mjs",
     "test:progresso": "node scripts/progresso.test.mjs",
-    "dist": "npm run build && electron-builder --win --publish never"
+    "test:worker": "node worker/teste.mjs",
+    "worker:deploy": "npx --yes wrangler deploy --config worker/wrangler.jsonc",
+    "dist": "npm run clean && npm run build && electron-builder --win --publish never",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true});require('node:fs').rmSync('release',{recursive:true,force:true})\""
   },
   "dependencies": {
+    "@fontsource/jetbrains-mono": "^5.3.0",
     "@supabase/supabase-js": "^2.112.3",
     "chokidar": "^3.6.0"
   },
@@ -38,16 +42,17 @@
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
     "jsdom": "^30.0.1",
     "lowlight": "^3.3.0",
+    "playwright": "^1.62.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwindcss": "^4.0.0",
     "tiptap-markdown": "^0.9.0",
     "typescript": "^5.5.0",
     "vite": "^5.3.0",
-    "wait-on": "^7.2.0",
-    "electron-builder": "^24.13.3"
+    "wait-on": "^7.2.0"
   },
   "build": {
     "appId": "br.athena.app",
@@ -60,6 +65,7 @@
       "dist/**/*",
       "build/icon.ico",
       "build/icon.png",
+      "build/esqueleto/**",
       "package.json"
     ],
     "win": {
@@ -71,13 +77,23 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "artifactName": "Athena-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "Athena"
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Athena",
+      "runAfterFinish": true,
+      "language": "1046",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "uninstallDisplayName": "Athena ${version}",
+      "deleteAppDataOnUninstall": false
     }
   }
 }

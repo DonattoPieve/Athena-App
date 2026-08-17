@@ -22,10 +22,13 @@ const PORTA = 8901;
 
 /** titulo do botao na barra lateral -> nome do arquivo do print */
 const TELAS_PT = {
+  home: "Home",
+  conteudo: "Meu conteúdo",
+  nova: "Nova nota",
   config: "Configurações",
   glossario: "Glossário",
-  comandos: "Comandos do Athena",
-  perfil: "Perfil — Teste",
+  comandos: "Comandos",
+  perfil: "Perfil",
   /** Nao e botao do rail: abre a pagina da wiki pela arvore. */
   leitura: null,
   /** Nao e botao do rail: abre o monitor da sessao pela lupa. */
@@ -34,10 +37,12 @@ const TELAS_PT = {
 
 const TELAS_EN = {
   ...TELAS_PT,
+  home: "Home",
+  conteudo: "My content",
   config: "Settings",
   glossario: "Glossary",
-  comandos: "Athena commands",
-  perfil: "Profile — Teste",
+  comandos: "Commands",
+  perfil: "Profile",
 };
 
 const argv = process.argv.slice(2);
@@ -96,9 +101,29 @@ await pagina.addInitScript(`
   }];
   window.athena = {
     vault: { get: async () => ({ path: "C:\\\\Users\\\\donat\\\\Desktop\\\\Athena", claudeBin: "claude" }),
-             pick: async () => ({ path: "" }), onChange: nada },
-    config: { setClaudeBin: async () => true },
-    win: { close: async () => true, toggleMaximize: async () => true },
+             pick: async () => ({ path: "" }), tamanho: async () => 3.2 * 1024 ** 3,
+             criarInterno: async () => ({ path: "C:\\\\vault" }),
+             exportar: async () => "C:\\Users\\donat\\Desktop\\athena.zip", onChange: nada },
+    config: {
+      setClaudeBin: async () => true,
+      get: async () => ({ formatoData: "DD/MM/YYYY", formatoHora: "24h", iniciarComSistema: false,
+                          densidade: "padrao", tamanhoFonte: 14, quebraLinha: true, confirmarExcluir: true }),
+      set: async (p) => ({ formatoData: "DD/MM/YYYY", formatoHora: "24h", iniciarComSistema: false,
+                           densidade: "padrao", tamanhoFonte: 14, quebraLinha: true, confirmarExcluir: true, ...p }),
+    },
+    usage: {
+      recentes: async () => ([{ rel: "wiki/subjects/C09-Computacao-Grafica/transformacoes.md", em: "2026-08-16T17:42:00Z" }]),
+      visitar: async () => true,
+      ultimaLeitura: async () => ({ rel: "wiki/subjects/C09-Computacao-Grafica/transformacoes.md",
+        titulo: "Transformacoes Geometricas - Parte 2", materia: "Computacao Grafica",
+        em: "2026-08-16T17:42:00Z", pct: 65 }),
+      termos: async () => ["Ponteiro"],
+      alternarTermo: async () => true,
+      revisao: async () => ([{ rel: "wiki/subjects/E09-Microcontroladores/intro.md",
+        titulo: "Introducao a Microcontroladores", materia: "Microcontroladores", geradaEm: "2026-08-14T10:00:00Z" }]),
+    },
+    win: { close: async () => true, minimize: async () => true, toggleMaximize: async () => true,
+            isMaximized: async () => false, onMaximized: nada },
     fs: {
       tree: async () => arvore, subjects: vazio, describe: async () => null, lessons: vazio,
       read: async () => ${JSON.stringify(PAGINA)},
@@ -106,14 +131,26 @@ await pagina.addInitScript(`
       create: async () => {}, rename: async (r) => r, trash: async () => true,
       openExternal: async () => true, pasteImage: async () => "", resolveLink: async () => null,
       openUrl: async () => true, buscar: vazio,
-      home: async () => ({ subjects: [], paginas: [], notas: 0, eventos: [], logConflitado: false }),
+      home: async () => ({
+        subjects: [{ code: "C09", nome: "Computacao Grafica", slug: "C09-Computacao-Grafica", paginas: 7 },
+                   { code: "E09", nome: "Microcontroladores", slug: "E09-Microcontroladores", paginas: 5 }],
+        paginas: [{ rel: "wiki/subjects/C09-Computacao-Grafica/transformacoes.md", titulo: "Transformacoes Geometricas", updated: "2026-08-16" },
+                  { rel: "wiki/subjects/E09-Microcontroladores/intro.md", titulo: "Introducao a Microcontroladores", updated: "2026-08-15" }],
+        notas: 10,
+        eventos: [{ data: "2026-08-16", texto: "transformacoes - fonte: aula-4.pdf", slug: "transformacoes", removido: false },
+                  { data: "2026-08-15", texto: "intro - fonte: aula-1.pdf", slug: "intro", removido: false }],
+        logConflitado: false,
+      }),
       glossario: async () => ([
-        { termo: "Ponteiro", contexto: "Variavel que guarda um endereco de memoria.",
+        { termo: "Ponteiro", categoria: "Computacao Grafica", contexto: "Variavel que guarda um endereco de memoria.",
           refs: [{ titulo: "Introducao a linguagem C", rel: "wiki/programacao/introducao-a-linguagem-c.md" }] },
-        { termo: "Heap", contexto: "Regiao de memoria reservada em tempo de execucao.",
+        { termo: "Heap", categoria: "Microcontroladores", contexto: "Regiao de memoria reservada em tempo de execucao.",
+          refs: [{ titulo: "Introducao a linguagem C", rel: "wiki/programacao/introducao-a-linguagem-c.md" }] },
+        { termo: "Buffer", categoria: "Computacao Grafica", contexto: "Memoria temporaria usada para guardar dados em transito.",
           refs: [{ titulo: "Introducao a linguagem C", rel: "wiki/programacao/introducao-a-linguagem-c.md" }] },
       ]),
     },
+    app: { versao: async () => "1.0.0" },
     clipboard: { read: async () => "", write: async () => true },
     account: {
       status: async () => ({ id: "1", name: "Teste", email: "donatto@gec.inatel.br" }),
@@ -159,7 +196,7 @@ for (const chave of alvos) {
     await pagina.waitForTimeout(200);
     await pagina.getByText("introducao-a-linguagem-c", { exact: false }).first().click();
   } else {
-    await pagina.locator(`.rail button[title^="${titulo}"]`).click();
+    await pagina.locator(".lateral-item", { hasText: titulo }).first().click();
   }
   await pagina.waitForTimeout(600);
   const caminho = `/tmp/tela-${chave}${EN ? "-en" : ""}.png`;

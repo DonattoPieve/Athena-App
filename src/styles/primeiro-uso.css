@@ -1,0 +1,145 @@
+/**
+ * Estilos da tela de Primeiro uso (`pu-`) — src/components/PrimeiroUso.tsx.
+ *
+ * Cores e raios sempre em var(--c-*) / var(--r-*), nunca hex fixo: existem
+ * 7 paletas × 2 temas (ver [data-palette] em index.css), e um hex aqui
+ * ficaria errado em quase todas as combinações. As únicas exceções são as
+ * cores de estado (erro/alerta) — mesmo par que .conferir e .alerta-conta já
+ * usam no resto do app, para não inventar uma terceira variação de vermelho.
+ */
+
+.pu-tela {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+}
+
+.pu-caixa {
+  width: min(520px, 100%);
+  padding: 28px 30px;
+}
+
+.pu-titulo {
+  margin: 0 0 8px;
+  font-size: 1.7rem;
+  font-weight: 600;
+  color: var(--c-accent);
+}
+
+.pu-sub {
+  margin: 0 0 20px;
+  color: var(--c-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Os dois caminhos, um embaixo do outro — largura cheia, texto à esquerda
+   (o .btn padrão é inline e centralizado, errado para um botão com duas
+   linhas de texto). */
+.pu-opcoes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pu-opcoes .btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+}
+.pu-opcao-titulo {
+  font-size: 14px;
+  font-weight: 600;
+}
+.pu-opcao-desc {
+  font-size: 11.5px;
+  color: var(--c-muted);
+  font-weight: 400;
+}
+/* Dentro do botão primário o texto secundário herdaria a cor de fundo —
+   escurece um pouco em vez de ficar ilegível. */
+.btn-primary .pu-opcao-desc {
+  color: color-mix(in srgb, var(--c-bg) 75%, transparent);
+}
+
+/* Aviso acima do <Login> reaproveitado, explicando por que ele apareceu
+   nesta tela em vez da tela de sempre. */
+.pu-aviso-login {
+  max-width: 420px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-card);
+  color: var(--c-muted);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Log do download, linha a linha — mesma fonte monoespaçada do resto do
+   app (ver --font-mono em index.css), só reduzida e com scroll próprio pra
+   não empurrar o resto da tela quando o R2 tiver muito arquivo. */
+.pu-log {
+  max-height: 220px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  overflow-y: auto;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+}
+.pu-log-linha {
+  margin: 0;
+  padding: 1px 0;
+  color: var(--c-muted);
+  font-size: 11.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.pu-log-vazio {
+  margin: 0;
+  padding: 1px 0;
+  color: var(--c-muted);
+  font-size: 11.5px;
+  font-style: italic;
+}
+
+.pu-resumo {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--c-text);
+}
+
+.pu-alerta {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-surface);
+  box-shadow: inset 3px 0 0 #d9901f;
+}
+.pu-alerta strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+}
+
+.pu-aviso {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--c-muted);
+  line-height: 1.5;
+}
+
+.pu-erro {
+  margin: 0 0 16px;
+  color: #e24b4a;
+  font-size: 13px;
+  line-height: 1.5;
+}

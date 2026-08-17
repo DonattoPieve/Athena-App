@@ -1,0 +1,320 @@
+/**
+ * Estilos do Glossário (`gl-`) e da Nova nota (`nn-`), num arquivo só porque
+ * as duas telas nasceram no mesmo pedido e o CSS de cada uma é pequeno.
+ * Prefixos separados para não colidir com nada de src/index.css nem entre si.
+ *
+ * Cores e raios sempre em var(--c-*) / var(--r-*): existem 7 paletas × 2
+ * temas (ver [data-palette] em index.css), e um hex fixo aqui ficaria errado
+ * em quase todas as combinações.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Glossário
+ * ------------------------------------------------------------------ */
+
+/* Campo de busca com a lupa e o atalho "Ctrl K" dentro da própria caixa —
+   como o campo de comando de qualquer IDE. */
+.gl-busca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-lg);
+  background: var(--c-card);
+  color: var(--c-muted);
+  transition: border-color 160ms, box-shadow 160ms;
+}
+.gl-busca:focus-within {
+  border-color: color-mix(in srgb, var(--c-accent) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 10%, transparent);
+}
+.gl-busca-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--c-text);
+  font: inherit;
+  font-size: 13px;
+}
+.gl-busca-input::placeholder {
+  color: var(--c-muted);
+}
+
+/* Chips de categoria + controles de ordenar/lista/grade numa linha só, que
+   quebra em janela estreita — a lista de categorias não tem tamanho fixo. */
+.gl-linha-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.gl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gl-chip {
+  padding: 4px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: border-color 140ms, background-color 140ms, color 140ms;
+}
+.gl-chip:hover {
+  border-color: color-mix(in srgb, var(--c-accent) 45%, transparent);
+  color: var(--c-text);
+}
+/* Chip ativo: borda roxa + fundo roxo translúcido + texto roxo — o mesmo
+   trio que `.btn[data-active]` já usa noutro lugar do app. */
+.gl-chip[data-ativo="true"] {
+  border-color: var(--c-accent);
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  font-weight: 500;
+}
+
+.gl-controles {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gl-ordenar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--c-muted);
+  white-space: nowrap;
+}
+.gl-ordenar .field {
+  width: auto;
+  padding: 5px 8px;
+  font-size: 11.5px;
+}
+.gl-modo {
+  display: flex;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+.gl-modo button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  border: none;
+  background: var(--c-card);
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: background-color 140ms, color 140ms;
+}
+.gl-modo button + button {
+  border-left: 1px solid var(--c-border);
+}
+.gl-modo button:hover {
+  color: var(--c-text);
+}
+.gl-modo button[data-ativo="true"] {
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+}
+
+.gl-contagem {
+  margin: 0 0 12px;
+  font-size: 11.5px;
+  color: var(--c-muted);
+}
+
+.gl-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gl-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.gl-termo {
+  padding: 12px 14px;
+}
+.gl-termo-topo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.gl-termo-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.gl-termo-nome {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--c-text);
+}
+.gl-termo-categoria {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--c-surface);
+  color: var(--c-muted);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+/* Favorito e "..." — mesmo botão fantasma, só o coração pinta quando ativo. */
+.gl-fav,
+.gl-mais {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--c-muted);
+  cursor: pointer;
+  transition: color 140ms, background-color 140ms;
+}
+.gl-fav:hover,
+.gl-mais:hover {
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+.gl-fav[data-ativo="true"] {
+  color: var(--c-accent);
+}
+.gl-termo-contexto {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--c-muted);
+}
+/* Na grade o card é menor e não pode crescer com uma definição longa. */
+.gl-grade .gl-termo-contexto {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gl-paginacao {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+}
+.gl-pagina {
+  display: grid;
+  place-items: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-card);
+  color: var(--c-muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.gl-pagina:hover:not(:disabled) {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+}
+.gl-pagina:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.gl-pagina[data-ativo="true"] {
+  background: var(--c-accent-light);
+  border-color: var(--c-accent);
+  color: var(--c-accent);
+  font-weight: 500;
+}
+.gl-reticencias {
+  padding: 0 2px;
+  color: var(--c-muted);
+  font-size: 11.5px;
+}
+.gl-pagina-rotulo {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+/* ------------------------------------------------------------------ *
+ * Nova nota
+ * ------------------------------------------------------------------ */
+
+.nn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+.nn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 16px;
+}
+.nn-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nn-ajuda {
+  margin: 0;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.nn-contagem {
+  margin: 0;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.nn-erro {
+  margin: 0;
+  color: #e24b4a;
+  font-size: 12px;
+}
+.nn-rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.nn-rodape-direita {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.nn-salvo {
+  color: #1d9e75;
+  font-size: 12px;
+}

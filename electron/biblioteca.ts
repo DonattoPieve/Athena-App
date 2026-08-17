@@ -13,7 +13,19 @@ export type TermoGlossario = {
   termo: string;
   contexto: string;
   refs: { titulo: string; rel: string }[];
+  /** Materia da pagina onde o termo foi visto primeiro — ver nomeMateria(). */
+  categoria: string;
 };
+
+/**
+ * Nome de exibicao da materia a partir da pasta `CODIGO-Nome-Da-Materia`
+ * (ex.: "C09-Computacao-Grafica" -> "Computacao Grafica"). So troca `-` por
+ * espaco e tira o codigo — nao existe classificacao semantica aqui, e o
+ * mesmo criterio que `Vault.home()` usa para nomear materia na tela inicial.
+ */
+function nomeMateria(pastaMateria: string): string {
+  return pastaMateria.split("-").slice(1).join(" ") || "Outros";
+}
 
 /** Primeira frase decente que cita o termo — o mesmo critério do site. */
 function primeiraFrase(conteudo: string, termo: string): string {
@@ -69,7 +81,15 @@ export async function glossario(vault: Vault): Promise<TermoGlossario[]> {
       for (const termo of termos) {
         const chave = termo.toLowerCase();
         if (!mapa.has(chave)) {
-          mapa.set(chave, { termo, contexto: primeiraFrase(conteudo, termo), refs: [] });
+          // Categoria fica presa na primeira pagina onde o termo aparece:
+          // o mesmo termo pode voltar em outra materia depois, mas ele so
+          // define a categoria da entrada uma vez, na criacao.
+          mapa.set(chave, {
+            termo,
+            contexto: primeiraFrase(conteudo, termo),
+            refs: [],
+            categoria: nomeMateria(materia),
+          });
         }
         const entrada = mapa.get(chave)!;
         if (!entrada.refs.some((r) => r.rel === rel)) entrada.refs.push({ titulo, rel });

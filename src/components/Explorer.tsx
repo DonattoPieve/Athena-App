@@ -8,6 +8,9 @@ import { t, tf } from "../lib/i18n";
 const EDITAVEIS = /\.(md|txt)$/i;
 const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
 
+/** MIME custom do drag-and-drop de mover — so a arvore le, nao precisa ser padrao. */
+const DND_MIME = "application/x-athena-rel";
+
 /** Espelha as guardas do vault.ts — o menu nao oferece o que o main recusaria. */
 const GRAVAVEIS = [
   "raw/subjects",
@@ -49,6 +52,10 @@ export function Explorer({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [criando, setCriando] = useState<Criando>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // Pasta sob o cursor durante um arrastar — so o realce visual, a validacao
+  // de verdade (origem gravavel, destino gravavel, sem sobrescrever) e do
+  // main via vault.mover().
+  const [dragOverRel, setDragOverRel] = useState<string | null>(null);
 
   async function guard(fn: () => Promise<unknown>) {
     setErro(null);
@@ -129,6 +136,21 @@ export function Explorer({
         ]
       : [];
 
+    // So arquivo: destacar uma pasta em janela propria nao faz sentido, ela
+    // ja tem lugar na arvore. `aba` tem que bater exatamente com o formato
+    // que o App usa para arquivo (ver `type Aba` em App.tsx).
+    const abrirOutraJanela: MenuItem[] = !node.dir
+      ? [
+          {
+            label: t("Abrir em outra janela"),
+            onClick: () =>
+              void guard(() =>
+                api.win.destacar({ id: node.rel, tipo: "arquivo", rel: node.rel }),
+              ),
+          },
+        ]
+      : [];
+
     return [
       {
         label: t("Nova nota"),
@@ -141,6 +163,7 @@ export function Explorer({
       { label: t("Renomear"), hint: "F2", disabled: !podeMexer, onClick: () => setRenaming(node.rel) },
       { label: t("Copiar caminho"), onClick: () => void api.clipboard.write(node.rel) },
       ...abrirMaterial,
+      ...abrirOutraJanela,
       { kind: "sep" },
       { label: t("Revelar no Explorer"), onClick: () => void api.fs.reveal(node.rel) },
       ...excluirDaWiki(node),
@@ -208,6 +231,8 @@ export function Explorer({
               criando={criando}
               setCriando={setCriando}
               guard={guard}
+              dragOverRel={dragOverRel}
+              setDragOverRel={setDragOverRel}
             />
           ))}
         </ul>
@@ -261,6 +286,8 @@ function Row({
   criando,
   setCriando,
   guard,
+  dragOverRel,
+  setDragOverRel,
 }: {
   node: TreeNode;
   depth: number;
@@ -274,6 +301,8 @@ function Row({
   criando: Criando;
   setCriando: (c: Criando) => void;
   guard: (fn: () => Promise<unknown>) => Promise<void>;
+  dragOverRel: string | null;
+  setDragOverRel: (r: string | null) => void;
 }) {
   // Tudo fechado ao abrir o app: a arvore inteira aberta e uma parede de nomes
   // e o caminho ate a aula some no meio. Pasta que recebe arquivo novo continua
@@ -301,13 +330,21 @@ function Row({
     );
   }
 
+  // So o que o menu deixaria mexer pode ser arrastado; so pasta gravavel pode
+  // receber. wiki/ e raw/INATEL ficam de fora dos dois lados sem checagem
+  // extra — e a mesma lista que ja guarda o menu de contexto.
+  const podeArrastar = !readOnly && gravavel(node.rel);
+  const podeReceberDrop = !readOnly && node.dir && gravavel(node.rel);
+
   return (
     <li>
       <button
-        className="nav-item"
+        className="nav-item exp-row"
         data-active={selected === node.rel}
         data-dir={node.dir}
+        data-drop-over={podeReceberDrop && dragOverRel === node.rel}
         style={{ paddingLeft: 8 + depth * 14, gap: 6 }}
+        draggable={podeArrastar}
         onClick={() => {
           if (node.dir) setOpen((o) => !o);
           onSelect(node.rel);
@@ -322,6 +359,32 @@ function Row({
             e.preventDefault();
             setRenaming(node.rel);
           }
+        }}
+        onDragStart={(e) => {
+          if (!podeArrastar) return;
+          e.dataTransfer.setData(DND_MIME, node.rel);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(e) => {
+          if (!podeReceberDrop) return;
+          // preventDefault e o que sinaliza ao navegador que este alvo aceita
+          // o drop — sem isso o onDrop nunca dispara.
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (dragOverRel !== node.rel) setDragOverRel(node.rel);
+        }}
+        onDragLeave={(e) => {
+          if (!podeReceberDrop) return;
+          // relatedTarget dentro do proprio botao e so o cursor passando por
+          // cima do icone/texto — nao pode apagar o realce nesse caso.
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverRel(null);
+        }}
+        onDrop={(e) => {
+          if (!podeReceberDrop) return;
+          e.preventDefault();
+          setDragOverRel(null);
+          const origem = e.dataTransfer.getData(DND_MIME);
+          if (origem && origem !== node.rel) void guard(() => api.fs.mover(origem, node.rel));
         }}
         title={readOnly ? tf("{rel} — somente leitura", { rel: node.rel }) : node.rel}
       >
@@ -355,6 +418,8 @@ function Row({
               onMenu={onMenu}
               renaming={renaming}
               setRenaming={setRenaming}
+              dragOverRel={dragOverRel}
+              setDragOverRel={setDragOverRel}
               criando={criando}
               setCriando={setCriando}
               guard={guard}

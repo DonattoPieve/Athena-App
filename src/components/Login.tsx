@@ -5,21 +5,15 @@ import { t } from "../lib/i18n";
 
 /**
  * Porta de entrada do app. Autentica no MESMO Supabase do site: e-mail e senha
- * do schema (`auth.users`), sessão gravada em `<vault>/.athena/session.json`
- * no formato do `athena login`. Entrar aqui é entrar no terminal, e vice-versa.
+ * do schema (`auth.users`), no formato do `athena login` — entrar aqui é
+ * entrar no terminal, e vice-versa.
  *
- * Vem depois de escolher o vault, não antes: a URL e a chave publicável saem
- * do `athena-web/.env.local`, que mora dentro do vault.
+ * Vem ANTES do vault, e não depois: é a conta que decide qual pasta o app
+ * abre (ver electron/main.ts, abrirVaultDaConta). Por isso as credenciais do
+ * Supabase usadas aqui são as embutidas no app, não as do `.env.local` de
+ * dentro de um vault que ainda não existe.
  */
-export function Login({
-  vaultPath,
-  onEntrou,
-  onTrocarVault,
-}: {
-  vaultPath: string;
-  onEntrou: (conta: Account) => void;
-  onTrocarVault: () => void;
-}) {
+export function Login({ onEntrou }: { onEntrou: (conta: Account) => void }) {
   const [modo, setModo] = useState<"entrar" | "criar">("entrar");
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -248,14 +242,6 @@ export function Login({
             </button>
           </p>
 
-          <hr style={{ border: "none", borderTop: "1px solid var(--c-border)", margin: "18px 0 12px" }} />
-
-          <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>
-            Vault: <code>{vaultPath}</code>
-            <button className="link-btn" style={{ marginLeft: 8 }} onClick={onTrocarVault}>
-              {t("trocar")}
-            </button>
-          </p>
         </div>
       </div>
     </div>

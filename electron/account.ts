@@ -51,18 +51,20 @@ export type Account = {
 };
 
 /**
- * Cache da ultima conta que entrou neste vault.
+ * Cache da ultima conta que entrou nesta maquina.
  *
- * Arquivo PROPRIO, nao dentro do session.json: aquele e compartilhado com o
- * CLI do vault e tem formato combinado. Cache e coisa do app.
+ * Arquivo PROPRIO, nao dentro do session.json: aquele tem formato combinado
+ * com o CLI do vault. Cache e coisa do app.
  */
-const CONTA_REL = path.join(".athena", "app-conta.json");
+function arquivoConta(): string {
+  return path.join(PASTA_SESSAO, "app-conta.json");
+}
 
-function guardarConta(vaultRoot: string, c: Account) {
+function guardarConta(c: Account) {
   try {
-    fs.mkdirSync(path.join(vaultRoot, ".athena"), { recursive: true });
+    fs.mkdirSync(PASTA_SESSAO, { recursive: true });
     fs.writeFileSync(
-      path.join(vaultRoot, CONTA_REL),
+      arquivoConta(),
       JSON.stringify({ id: c.id, name: c.name, email: c.email, avatarUrl: c.avatarUrl }, null, 2),
       "utf8",
     );
@@ -71,9 +73,9 @@ function guardarConta(vaultRoot: string, c: Account) {
   }
 }
 
-function contaEmCache(vaultRoot: string): Account | null {
+function contaEmCache(): Account | null {
   try {
-    const c = JSON.parse(fs.readFileSync(path.join(vaultRoot, CONTA_REL), "utf8"));
+    const c = JSON.parse(fs.readFileSync(arquivoConta(), "utf8"));
     if (!c?.email) return null;
     return { id: c.id ?? "", name: c.name ?? c.email, email: c.email, avatarUrl: c.avatarUrl ?? null };
   } catch {
@@ -111,7 +113,7 @@ const BUCKET = "avatars";
  * Foi assim que o primeiro upload voltou "new row violates row-level security".
  */
 export async function clienteAutenticado(vaultRoot: string) {
-  const file = sessionFile(vaultRoot);
+  const file = sessionFile();
   if (!fs.existsSync(file)) throw new Error("Sem sessão nesta máquina.");
   const { refresh_token } = JSON.parse(fs.readFileSync(file, "utf8"));
 
@@ -120,7 +122,11 @@ export async function clienteAutenticado(vaultRoot: string) {
   if (error || !data.session || !data.user) throw new Error("Sessão expirada. Entre de novo.");
   saveSession(vaultRoot, data.session.refresh_token);
   await supabase.auth.setSession(data.session);
-  return { supabase, user: data.user };
+  // A sessao vai junto porque o `access_token` e o que o Worker do R2 pede
+  // para provar de quem e o pedido (ver bootstrap.ts). Ele so existe aqui: o
+  // cliente nao o expoe depois, e reler o arquivo daria o refresh token, que
+  // e outra coisa.
+  return { supabase, user: data.user, session: data.session };
 }
 
 /** Le o avatar do perfil. Falha aqui nao pode derrubar o login. */
@@ -194,17 +200,105 @@ function emPortugues(msg: string): string {
 const SESSION_REL = path.join(".athena", "session.json");
 const ENV_REL = path.join("athena-web", ".env.local");
 
-function sessionFile(vaultRoot: string) {
-  return path.join(vaultRoot, SESSION_REL);
+/**
+ * Credenciais publicas do Supabase, embutidas no app como ultimo recurso.
+ *
+ * Um vault criado pelo "Primeiro uso" (ver bootstrap.ts) nao tem `athena-web/`
+ * clonado — sem isto, `readEnv` nunca acharia URL nem chave, e login virava
+ * impossivel sem clonar o repo do site primeiro, exatamente o que o
+ * bootstrap existe pra eliminar.
+ *
+ * E SEGURO embutir: e a chave "anon", protegida por RLS em toda tabela do
+ * projeto — a MESMA que o athena-web hoje expoe no navegador de qualquer
+ * visitante do site. Continua nao existindo SERVICE_ROLE em lugar nenhum
+ * deste app (nem o projeto tem uma gerada pra uso externo).
+ *
+ * So entra em jogo quando o arquivo NAO existe. Se existir mas estiver
+ * incompleto, o erro original abaixo continua valendo — misturar com o
+ * padrao em silencio arriscaria logar/publicar numa conta diferente da que
+ * a pessoa configurou de proposito.
+ */
+const SUPABASE_PADRAO = {
+  url: "https://cxlfnpzdsaiyuazqdjtw.supabase.co",
+  key:
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4bGZucHpkc2FpeXVhenFkanR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1NDcxMTgsImV4cCI6MjEwMTEyMzExOH0.ONCO582MyotpGgbZ3phvbYjVjuoxf2-MwBgBjtvV9WM",
+};
+
+/* ------------------------------------------------------------------ *
+ * Onde mora a sessao
+ *
+ * Era `<vault>/.athena/session.json`, dentro do vault, para o app e o
+ * `athena login` do terminal compartilharem o MESMO arquivo. Isso deixou de
+ * poder ser assim quando o vault passou a depender da conta: para saber qual
+ * pasta abrir e preciso ja saber quem entrou, e a sessao nao pode morar dentro
+ * da resposta. Agora ela fica com os dados do app (`%APPDATA%\athena-app`),
+ * que ja e por usuario do Windows.
+ *
+ * O ESPELHO preserva o terminal: quando o vault ativo tem `athena-web/` (vault
+ * do jeito antigo, com os scripts dentro), a mesma sessao e copiada para
+ * `<vault>/.athena/session.json` e `athena publish`/`pull` continuam entrando
+ * sozinhos, como sempre foi.
+ * ------------------------------------------------------------------ */
+
+let PASTA_SESSAO = "";
+let ESPELHO: string | null = null;
+
+/** Chamado uma vez, na subida do app, com `app.getPath("userData")`. */
+export function configurarSessao(pastaDoApp: string) {
+  PASTA_SESSAO = pastaDoApp;
 }
 
-/** Le o .env.local do athena-web sem validar nada alem do que usamos. */
+/** Liga (ou desliga) a copia da sessao para dentro do vault ativo. */
+export function espelharSessaoEm(vaultRoot: string | null) {
+  ESPELHO =
+    vaultRoot && fs.existsSync(path.join(vaultRoot, "athena-web")) ? vaultRoot : null;
+  const atual = sessionFile();
+  if (ESPELHO && fs.existsSync(atual)) {
+    try {
+      escreverEspelho(fs.readFileSync(atual, "utf8"));
+    } catch {
+      // espelho e conveniencia para o CLI; falhar aqui nao afeta o app
+    }
+  }
+}
+
+/**
+ * Traz a sessao de um vault do jeito antigo para o lugar novo.
+ *
+ * Sem isto, quem ja usava o app seria deslogado na primeira abertura depois
+ * desta mudanca — sessao valida no disco, ignorada por estar na pasta errada.
+ */
+export function importarSessaoAntiga(vaultRoot: string | null) {
+  if (!vaultRoot || fs.existsSync(sessionFile())) return;
+  const antigo = path.join(vaultRoot, SESSION_REL);
+  if (!fs.existsSync(antigo)) return;
+  try {
+    fs.mkdirSync(PASTA_SESSAO, { recursive: true });
+    fs.copyFileSync(antigo, sessionFile());
+  } catch {
+    // sem drama: cai na tela de login
+  }
+}
+
+function escreverEspelho(conteudo: string) {
+  if (!ESPELHO) return;
+  fs.mkdirSync(path.join(ESPELHO, ".athena"), { recursive: true });
+  fs.writeFileSync(path.join(ESPELHO, SESSION_REL), conteudo, { mode: 0o600 });
+}
+
+/** O `vaultRoot` das funcoes abaixo nao manda mais aqui — a sessao e do app. */
+function sessionFile() {
+  return path.join(PASTA_SESSAO, "session.json");
+}
+
+/** Le o .env.local do athena-web; sem ele, cai nas credenciais embutidas. */
 function readEnv(vaultRoot: string): { url: string; key: string } {
+  // Login acontece ANTES de existir vault (e ele que decide qual pasta abrir):
+  // nesse momento so as credenciais embutidas existem, e sao as certas.
+  if (!vaultRoot) return SUPABASE_PADRAO;
   const file = path.join(vaultRoot, ENV_REL);
   if (!fs.existsSync(file)) {
-    throw new Error(
-      `Nao achei ${ENV_REL} no vault. E de la que saem a URL e a chave publicavel do Supabase.`,
-    );
+    return SUPABASE_PADRAO;
   }
   const env: Record<string, string> = {};
   for (const line of fs.readFileSync(file, "utf8").split("\n")) {
@@ -229,28 +323,43 @@ function makeClient(vaultRoot: string): SupabaseClient {
   });
 }
 
-export function hasSession(vaultRoot: string): boolean {
-  return fs.existsSync(sessionFile(vaultRoot));
+export function hasSession(_vaultRoot?: string): boolean {
+  return fs.existsSync(sessionFile());
 }
 
-function saveSession(vaultRoot: string, refreshToken: string) {
-  const file = sessionFile(vaultRoot);
+function saveSession(_vaultRoot: string, refreshToken: string) {
+  const file = sessionFile();
+  const conteudo = JSON.stringify(
+    { refresh_token: refreshToken, saved_at: new Date().toISOString() },
+    null,
+    2,
+  );
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(
     file,
-    JSON.stringify({ refresh_token: refreshToken, saved_at: new Date().toISOString() }, null, 2),
+    conteudo,
     // Mesmo modo do CLI. No Windows o bit tem efeito limitado, mas manter
     // igual evita divergencia quando o vault for lido no Linux.
     { mode: 0o600 },
   );
+  try {
+    escreverEspelho(conteudo);
+  } catch {
+    // o espelho e para o CLI; se falhar, o app continua logado
+  }
 }
 
-export function logout(vaultRoot: string) {
-  const file = sessionFile(vaultRoot);
+export function logout(_vaultRoot?: string) {
+  const file = sessionFile();
   if (fs.existsSync(file)) fs.rmSync(file);
   // Sem isto o modo offline ressuscitaria a conta de quem acabou de sair.
-  const cache = path.join(vaultRoot, CONTA_REL);
-  if (fs.existsSync(cache)) fs.rmSync(cache);
+  if (fs.existsSync(arquivoConta())) fs.rmSync(arquivoConta());
+  // Sair no app tem que sair no terminal tambem — sempre foi o mesmo login.
+  if (ESPELHO) {
+    const espelho = path.join(ESPELHO, SESSION_REL);
+    if (fs.existsSync(espelho)) fs.rmSync(espelho);
+  }
+  ESPELHO = null;
 }
 
 /**
@@ -258,7 +367,7 @@ export function logout(vaultRoot: string) {
  * Rotaciona o refresh token, porque o Supabase invalida o anterior a cada uso.
  */
 export async function status(vaultRoot: string): Promise<Account | null> {
-  const file = sessionFile(vaultRoot);
+  const file = sessionFile();
   if (!fs.existsSync(file)) return null;
 
   let refresh_token: string;
@@ -280,7 +389,7 @@ export async function status(vaultRoot: string): Promise<Account | null> {
     // Sem rede o vault continua no disco. Entrar pelo cache e o certo aqui;
     // devolver null jogaria a pessoa numa tela de login que tambem precisa
     // de rede — ou seja, porta trancada por fora.
-    const cache = ehFalhaDeRede(e) ? contaEmCache(vaultRoot) : null;
+    const cache = ehFalhaDeRede(e) ? contaEmCache() : null;
     return cache ? { ...cache, offline: true } : null;
   }
   if (!data.session || !data.user) return null;
@@ -288,7 +397,7 @@ export async function status(vaultRoot: string): Promise<Account | null> {
   saveSession(vaultRoot, data.session.refresh_token);
   await supabase.auth.setSession(data.session);
   const conta = await contaDe(supabase, data.user);
-  guardarConta(vaultRoot, conta);
+  guardarConta(conta);
   return conta;
 }
 
@@ -319,7 +428,7 @@ export async function updateAccount(
   vaultRoot: string,
   campos: { email?: string; password?: string; nome?: string },
 ): Promise<{ pendente: boolean }> {
-  const file = sessionFile(vaultRoot);
+  const file = sessionFile();
   if (!fs.existsSync(file)) throw new Error("Sem sessao nesta maquina.");
   const { refresh_token } = JSON.parse(fs.readFileSync(file, "utf8"));
 
@@ -578,7 +687,7 @@ export async function oauthLogin(
   saveSession(vaultRoot, troca.data.session.refresh_token);
   await supabase.auth.setSession(troca.data.session);
   const conta = await contaDe(supabase, troca.data.user);
-  guardarConta(vaultRoot, conta);
+  guardarConta(conta);
   return conta;
 }
 

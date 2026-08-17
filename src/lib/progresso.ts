@@ -75,3 +75,30 @@ export function progresso(lines: Line[]): Marco {
   }
   return melhor;
 }
+
+/**
+ * Todos os marcos com evidencia, em ordem — a lista de etapas do painel.
+ *
+ * Mesma varredura de `progresso`, so que guardando todos em vez do maior.
+ * Nao inventa etapa futura: o painel mostra o que ja aconteceu, e o que falta
+ * aparece quando acontecer.
+ */
+export function etapas(lines: Line[]): string[] {
+  let inicio = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].text.trim().startsWith("> ")) {
+      inicio = i;
+      break;
+    }
+  }
+  const vistos: string[] = [];
+  for (const m of MARCOS) {
+    for (let i = inicio; i < lines.length; i++) {
+      if (m.casa.test(lines[i].text)) {
+        vistos.push(m.nome);
+        break;
+      }
+    }
+  }
+  return vistos;
+}

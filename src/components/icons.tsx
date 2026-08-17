@@ -53,6 +53,33 @@ function Rail({ children }: { children: React.ReactNode }) {
   );
 }
 
+export const IconHome = () => (
+  <Rail>
+    <path d="m3 10 9-7 9 7v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <path d="M9 21v-7h6v7" />
+  </Rail>
+);
+
+export const IconRaio = () => (
+  <Rail>
+    <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
+  </Rail>
+);
+
+export const IconRelogio = () => (
+  <Rail>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3 2" />
+  </Rail>
+);
+
+export const IconGrafico = () => (
+  <Rail>
+    <path d="M3 3v18h18" />
+    <path d="m7 14 4-4 3 3 5-6" />
+  </Rail>
+);
+
 export const IconArquivos = () => (
   <Rail>
     <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />

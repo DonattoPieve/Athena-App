@@ -90,23 +90,93 @@ export type TermoGlossario = {
   termo: string;
   contexto: string;
   refs: { titulo: string; rel: string }[];
+  /** Matéria da página onde o termo apareceu primeiro (ver electron/biblioteca.ts). */
+  categoria: string;
+};
+
+/** Preferências de exibição do app — persistem no athena-app.json (ver electron/prefs.ts). */
+export type Prefs = {
+  formatoData: "DD/MM/YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY";
+  formatoHora: "24h" | "12h";
+  iniciarComSistema: boolean;
+  densidade: "compacta" | "padrao" | "confortavel";
+  tamanhoFonte: 12 | 14 | 16 | 18 | 20;
+  quebraLinha: boolean;
+  confirmarExcluir: boolean;
 };
 
 /** Resultado de `athena publish` / `athena pull` rodados pelo app. */
 export type ScriptResult = { ok: boolean; output: string; canForce: boolean };
 
+/** Resultado de `vault.baixarTudo()` — ver electron/bootstrap.ts. */
+export type ResultadoBootstrap = {
+  criados: number;
+  iguais: number;
+  /** Arquivos que já existiam com conteúdo diferente do banco — não tocados. */
+  conflitos: string[];
+  /** R2 não estava configurado nesta máquina: PDFs/anexos não foram baixados. */
+  semR2: boolean;
+};
+
 type AthenaBridge = {
   vault: {
     get(): Promise<{ path: string | null; claudeBin: string }>;
     pick(): Promise<{ path: string | null }>;
+    /** Bytes ocupados, sem node_modules nem .git. */
+    tamanho(): Promise<number>;
     onChange(cb: () => void): () => void;
+    /** Zip do vault inteiro. Devolve o caminho salvo, ou null se cancelou. */
+    exportar(): Promise<string | null>;
+    /** Escolhe pasta para um vault NOVO — não exige CLAUDE.md/raw/ como pick(). Null se cancelou. */
+    escolherPastaNova(): Promise<string | null>;
+    /** Cria a estrutura mínima numa pasta vazia e a torna o vault ativo. */
+    criarNovo(pasta: string): Promise<{ path: string }>;
+    /** `athena pull` sem terminal: subjects/pages/notes do Supabase + material do R2. */
+    /** Cria o vault desta conta dentro dos dados do app, sem perguntar pasta. */
+    criarInterno(): Promise<{ path: string }>;
+    baixarTudo(): Promise<ResultadoBootstrap>;
+    /** Progresso linha a linha de baixarTudo(), enquanto ele roda. */
+    onLinhaBootstrap(cb: (linha: string) => void): () => void;
   };
-  config: { setClaudeBin(bin: string): Promise<boolean> };
+  app: { versao(): Promise<string> };
+  config: {
+    setClaudeBin(bin: string): Promise<boolean>;
+    get(): Promise<Prefs>;
+    set(p: Partial<Prefs>): Promise<Prefs>;
+  };
+  usage: {
+    /** Mais recente primeiro, no máximo 20. */
+    recentes(): Promise<{ rel: string; em: string }[]>;
+    /** Registra visita. `pct` = quanto da página foi rolada (0..100). */
+    visitar(rel: string, pct?: number): Promise<boolean>;
+    /** Para o card "Continue de onde parou". null se nunca leu nada. */
+    ultimaLeitura(): Promise<{
+      rel: string;
+      titulo: string;
+      materia: string;
+      em: string;
+      pct: number;
+    } | null>;
+    /** Termos do glossário marcados (bookmark). */
+    termos(): Promise<string[]>;
+    /** Devolve o estado NOVO: true = virou marcado. */
+    alternarTermo(termo: string): Promise<boolean>;
+    /** Páginas da wiki que ainda não têm `-review.md` ao lado. */
+    revisao(): Promise<
+      { rel: string; titulo: string; materia: string; geradaEm: string }[]
+    >;
+  };
   /** A moldura da janela e desenhada pelo app — ver TitleBar.tsx. */
   win: {
     close(): Promise<boolean>;
+    minimize(): Promise<boolean>;
     /** Devolve o estado NOVO: true = maximizada. */
     toggleMaximize(): Promise<boolean>;
+    isMaximized(): Promise<boolean>;
+    /** Abre uma janela nova ja com esta aba dentro. */
+    destacar(aba: unknown, x?: number, y?: number): Promise<boolean>;
+    /** Tambem dispara quando o snap do Windows maximiza por fora do app. */
+    onMaximized(cb: (maximizada: boolean) => void): () => void;
   };
   fs: {
     tree(scope: "raw" | "wiki"): Promise<TreeNode[]>;
@@ -119,6 +189,8 @@ type AthenaBridge = {
     mkdir(rel: string): Promise<void>;
     create(rel: string, content?: string): Promise<void>;
     rename(rel: string, nome: string): Promise<string>;
+    /** Move arquivo/pasta para dentro de outra pasta (drag-and-drop). Devolve o novo rel. */
+    mover(relOrigem: string, relPastaDestino: string): Promise<string>;
     trash(rel: string): Promise<boolean>;
     openExternal(rel: string): Promise<boolean>;
     pasteImage(base: string, ext: string, data: Uint8Array): Promise<string>;

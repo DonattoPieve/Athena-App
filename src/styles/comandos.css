@@ -1,0 +1,254 @@
+/**
+ * Comandos, reconstruída a partir do mockup aprovado. Prefixo `cmd-` para
+ * não colidir com nada de src/index.css.
+ *
+ * Cores e raios sempre em var(--c-*) / var(--r-*): existem 7 paletas × 2
+ * temas (ver [data-palette] em index.css), e um hex fixo aqui ficaria errado
+ * em quase todas as combinações. A única exceção é o vermelho de perigo
+ * (remoção): mesmo hex fixo (#e24b4a) que o resto do app já usa nele — cor
+ * de estado, não de marca, igual nas 14 combinações de tema × paleta.
+ */
+
+/* ---- alvo selecionado ---- */
+.cmd-alvo {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cmd-alvo-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cmd-alvo-nome {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.cmd-alvo-codigo {
+  color: var(--c-accent);
+}
+.cmd-alvo-caminho {
+  display: block;
+  font-size: 11.5px;
+  color: var(--c-muted);
+  overflow-wrap: anywhere;
+}
+.cmd-alvo-atualizado {
+  margin: 0;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+/* ---- vazio: nada selecionado na árvore ---- */
+.cmd-vazio {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.cmd-vazio-texto {
+  margin: 0;
+  color: var(--c-muted);
+}
+
+/* ---- título das seções "Gerar conhecimento" / "Outras ações" ---- */
+.cmd-secao-titulo {
+  margin: 4px 0 10px;
+}
+
+/* ---- grade de 4 cartões: gerar página / regerar / questões / revisar ---- */
+.cmd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+.cmd-card {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.cmd-card-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+}
+.cmd-card-icone svg {
+  width: 17px;
+  height: 17px;
+}
+.cmd-card-titulo {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.cmd-card-desc {
+  margin: 0;
+  flex: 1;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--c-muted);
+}
+.cmd-card-btn {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* ---- outras ações: linha de botões utilitários ---- */
+.cmd-outras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cmd-outras svg {
+  width: 14px;
+  height: 14px;
+}
+/* Remover é o botão perigoso da linha — borda e texto em vermelho, como o
+   resto do app já marca ação destrutiva (ver .btn-danger em index.css). */
+.cmd-perigo {
+  border-color: color-mix(in srgb, #e24b4a 45%, var(--c-border));
+  color: #e24b4a;
+}
+.cmd-perigo:hover:not(:disabled) {
+  border-color: #e24b4a;
+  color: #e24b4a;
+}
+.cmd-erro {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: #e24b4a;
+}
+
+/* ---- confirmação de remoção ---- */
+.cmd-confirmar {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #e24b4a;
+  border-radius: var(--r-xl);
+  background: var(--c-surface);
+}
+.cmd-confirmar-titulo {
+  margin: 0;
+  font-weight: 500;
+}
+.cmd-confirmar-aviso {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+.cmd-confirmar-acoes {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- histórico de comandos ---- */
+.cmd-historico {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cmd-historico-vazio {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+.cmd-historico-lista {
+  display: flex;
+  flex-direction: column;
+}
+.cmd-historico-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--c-border);
+}
+.cmd-historico-item:last-child {
+  border-bottom: none;
+}
+.cmd-historico-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+}
+.cmd-historico-icone svg {
+  width: 13px;
+  height: 13px;
+}
+/* Linha de remoção: mesmo hex de erro/remoção do resto do app (ver
+   src/styles/config.css) — cor de estado, não de marca. */
+.cmd-historico-item[data-removido="true"] .cmd-historico-icone {
+  background: color-mix(in srgb, #e24b4a 16%, transparent);
+  color: #e24b4a;
+}
+.cmd-historico-corpo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cmd-historico-acao {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-text);
+}
+.cmd-historico-arquivo {
+  margin: 0;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.cmd-historico-quando {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.cmd-historico-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.cmd-historico-ponto {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--c-accent);
+}
+.cmd-historico-item[data-removido="true"] .cmd-historico-ponto {
+  background: #e24b4a;
+}
+.cmd-historico-item[data-removido="true"] .cmd-historico-estado {
+  color: #e24b4a;
+}
+.cmd-vermais {
+  align-self: flex-end;
+  margin-top: 4px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+}

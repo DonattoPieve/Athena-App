@@ -1,0 +1,27 @@
+{
+  "name": "athena-r2",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "workers_dev": true,
+
+  // O bucket entra por binding. É isto que faz a credencial do R2 não existir:
+  // o Worker fala com o bucket por dentro da Cloudflare, sem access key nenhuma.
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "athena"
+    }
+  ],
+
+  // Públicas as duas. A chave "anon" do Supabase é a mesma que o athena-web já
+  // expõe no navegador de qualquer visitante: ela só identifica o projeto; quem
+  // manda é o RLS e, aqui, o dono escrito na chave do objeto.
+  "vars": {
+    "SUPABASE_URL": "https://cxlfnpzdsaiyuazqdjtw.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4bGZucHpkc2FpeXVhenFkanR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1NDcxMTgsImV4cCI6MjEwMTEyMzExOH0.ONCO582MyotpGgbZ3phvbYjVjuoxf2-MwBgBjtvV9WM"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

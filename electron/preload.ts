@@ -8,18 +8,52 @@ const api = {
   vault: {
     get: () => ipcRenderer.invoke("vault:get"),
     pick: () => ipcRenderer.invoke("vault:pick"),
+    tamanho: () => ipcRenderer.invoke("vault:tamanho"),
     onChange: (cb: () => void) => {
       const handler = () => cb();
       ipcRenderer.on("vault:changed", handler);
       return () => ipcRenderer.removeListener("vault:changed", handler);
     },
+    exportar: () => ipcRenderer.invoke("vault:exportar"),
+    // Primeiro uso — ver electron/bootstrap.ts e src/components/PrimeiroUso.tsx.
+    escolherPastaNova: () => ipcRenderer.invoke("vault:escolherPastaNova"),
+    criarNovo: (pasta: string) => ipcRenderer.invoke("vault:criarNovo", pasta),
+    criarInterno: () => ipcRenderer.invoke("vault:criarInterno"),
+    baixarTudo: () => ipcRenderer.invoke("vault:baixarTudo"),
+    onLinhaBootstrap: (cb: (linha: string) => void) => {
+      const handler = (_: unknown, linha: string) => cb(linha);
+      ipcRenderer.on("bootstrap:linha", handler);
+      return () => ipcRenderer.removeListener("bootstrap:linha", handler);
+    },
+  },
+  app: {
+    versao: () => ipcRenderer.invoke("app:versao"),
   },
   config: {
     setClaudeBin: (bin: string) => ipcRenderer.invoke("config:setClaudeBin", bin),
+    get: () => ipcRenderer.invoke("config:getPrefs"),
+    set: (p: Record<string, unknown>) => ipcRenderer.invoke("config:setPrefs", p),
+  },
+  usage: {
+    recentes: () => ipcRenderer.invoke("usage:recentes"),
+    visitar: (rel: string, pct?: number) => ipcRenderer.invoke("usage:visitar", rel, pct),
+    ultimaLeitura: () => ipcRenderer.invoke("usage:ultimaLeitura"),
+    termos: () => ipcRenderer.invoke("usage:termos"),
+    alternarTermo: (termo: string) => ipcRenderer.invoke("usage:alternarTermo", termo),
+    revisao: () => ipcRenderer.invoke("usage:revisao"),
   },
   win: {
     close: () => ipcRenderer.invoke("win:close"),
+    minimize: () => ipcRenderer.invoke("win:minimize"),
     toggleMaximize: () => ipcRenderer.invoke("win:toggleMaximize"),
+    isMaximized: () => ipcRenderer.invoke("win:isMaximized"),
+    destacar: (aba: unknown, x?: number, y?: number) =>
+      ipcRenderer.invoke("win:destacar", aba, x, y),
+    onMaximized: (cb: (m: boolean) => void) => {
+      const handler = (_: unknown, m: boolean) => cb(m);
+      ipcRenderer.on("win:maximized", handler);
+      return () => ipcRenderer.removeListener("win:maximized", handler);
+    },
   },
   fs: {
     tree: (scope: "raw" | "wiki") => ipcRenderer.invoke("fs:tree", scope),
@@ -34,6 +68,8 @@ const api = {
     mkdir: (rel: string) => ipcRenderer.invoke("fs:mkdir", rel),
     create: (rel: string, content = "") => ipcRenderer.invoke("fs:create", rel, content),
     rename: (rel: string, nome: string) => ipcRenderer.invoke("fs:rename", rel, nome),
+    mover: (relOrigem: string, relPastaDestino: string) =>
+      ipcRenderer.invoke("fs:mover", relOrigem, relPastaDestino),
     trash: (rel: string) => ipcRenderer.invoke("fs:trash", rel),
     openExternal: (rel: string) => ipcRenderer.invoke("fs:openExternal", rel),
     pasteImage: (base: string, ext: string, data: Uint8Array) =>

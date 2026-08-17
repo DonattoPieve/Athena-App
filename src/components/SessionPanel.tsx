@@ -31,8 +31,15 @@ function append(lines: Line[], line: Line): Line[] {
  */
 export function SessionPanel({
   onStateChange,
+  abrir,
 }: {
   onStateChange: (busy: boolean) => void;
+  /**
+   * Contador vindo de fora: quem quiser abrir o monitor incrementa. E um
+   * numero, e nao um booleano, porque abrir duas vezes seguidas precisa ser
+   * dois eventos — com booleano o segundo clique nao mudaria nada.
+   */
+  abrir?: number;
 }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [state, setState] = useState<SessionState | null>(null);
@@ -57,6 +64,14 @@ export function SessionPanel({
       setQueue(s.queue);
       setAuthNeeded(s.authNeeded);
       onStateChange(busyOf(s.state));
+      // O que veio no snapshot é PASSADO, não evento: registrar aqui é o que
+      // impede o monitor de escancarar sozinho ao abrir o app quando o último
+      // comando tinha parado numa pergunta.
+      antes.current = { awaiting: s.state === "awaiting", auth: s.authNeeded };
+    }).catch(() => {
+      // Sem snapshot não há passado para comparar; parte do zero, senão o
+      // abrir-sozinho nunca mais funcionaria nesta janela.
+      antes.current = { awaiting: false, auth: false };
     });
     return () => {
       alive = false;
@@ -97,11 +112,45 @@ export function SessionPanel({
     return () => window.removeEventListener("keydown", fechar);
   }, [ampliado]);
 
-  // Pergunta do Claude ou queda da conta: abre sem pedir. Nos dois casos o
-  // trabalho parou e depende de alguém ver.
+  /**
+   * Abre sozinho SÓ na virada — nunca no que já estava.
+   *
+   * O `snapshot()` da montagem traz o estado antigo: se o último comando parou
+   * numa pergunta, abrir o app (ou trocar de aba, que remonta este painel numa
+   * janela nova) escancarava o monitor por cima de tudo, sem nada ter
+   * acontecido agora. Guardando o valor anterior, só a TRANSIÇÃO para
+   * "aguardando" abre — que é o momento em que alguém precisa mesmo ver.
+   */
+  const antes = useRef<{ awaiting: boolean; auth: boolean } | null>(null);
   useEffect(() => {
-    if (awaiting || authNeeded) setAmpliado(true);
+    const anterior = antes.current;
+    // Ainda sem passado registrado: o snapshot não chegou. Comparar agora
+    // trataria o estado antigo como se tivesse acabado de acontecer.
+    if (!anterior) return;
+    antes.current = { awaiting, auth: authNeeded };
+    if ((awaiting && !anterior.awaiting) || (authNeeded && !anterior.auth)) {
+      setAmpliado(true);
+    }
   }, [awaiting, authNeeded]);
+
+  /**
+   * Pedido de fora (Task Center): abre quando o CONTADOR muda.
+   *
+   * Antes isto era um "pule a primeira execução", e era o defeito: em
+   * desenvolvimento o StrictMode monta, desmonta e monta cada componente de
+   * novo, rodando o efeito duas vezes. O sinalizador já estava gasto na
+   * segunda passada, então o monitor abria sozinho toda vez que o app subia.
+   *
+   * Comparar o valor resolve de vez: rodar duas vezes com o mesmo número não
+   * é evento nenhum. Vale igual em desenvolvimento e em produção — que é o
+   * motivo de não bastar tirar o StrictMode.
+   */
+  const ultimoAbrir = useRef(abrir);
+  useEffect(() => {
+    if (abrir === ultimoAbrir.current) return;
+    ultimoAbrir.current = abrir;
+    setAmpliado(true);
+  }, [abrir]);
 
   async function send() {
     if (!reply.trim()) return;

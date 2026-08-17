@@ -19,8 +19,14 @@ import { ClaudeRunner, Cmd, SessionEvent } from "./claude";
 import * as account from "./account";
 import * as publish from "./publish";
 import * as biblioteca from "./biblioteca";
+import * as usage from "./usage";
+import * as bootstrap from "./bootstrap";
+import { getPrefs, setPrefs, zipPastaStore, type Prefs, type PrefsSalvas } from "./prefs";
 
 type Config = {
+  /** Vault de cada conta: id do usuario -> pasta. Ver abrirVaultDaConta(). */
+  vaults?: Record<string, string>;
+  /** Vault unico de antes de cada conta ter a sua pasta. Hoje so migracao. */
   vaultPath?: string;
   claudeBin?: string;
   /** Publicar sozinho quando o comando termina com OK — igual ao athena.bat. */
@@ -29,6 +35,8 @@ type Config = {
   autoPull?: boolean;
   /** Ultima conta que assumiu cada vault: caminho -> e-mail. Ver comDono(). */
   donos?: Record<string, string>;
+  /** Preferencias de exibicao — tudo em Prefs menos iniciarComSistema (ver prefs.ts). */
+  prefs?: Partial<PrefsSalvas>;
 };
 
 const CONFIG_FILE = () => path.join(app.getPath("userData"), "athena-app.json");
@@ -52,8 +60,15 @@ let runner: ClaudeRunner | null = null;
 let watcher: FSWatcher | null = null;
 let statusWatcher: FSWatcher | null = null;
 
+/**
+ * Manda para TODAS as janelas, nao so para a principal.
+ *
+ * Depois que uma aba pode ser arrancada para uma janela propria, o estado da
+ * sessao deixou de ser de uma janela so: a janela destacada tambem precisa
+ * saber que o Claude parou para perguntar.
+ */
 function send(channel: string, payload: unknown) {
-  win?.webContents.send(channel, payload);
+  for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload);
 }
 
 /** Le o veredito na raiz e avisa o renderer. Unico caminho de atualizacao. */
@@ -103,6 +118,13 @@ function attachVault(root: string) {
     awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   });
   statusWatcher.on("all", () => void pushStatus());
+
+  // O `athena publish`/`pull` do terminal leem a sessao de dentro do vault; o
+  // app agora a guarda em %APPDATA%. O espelho mantem os dois entrando juntos.
+  account.espelharSessaoEm(root);
+  // Vault novo, pull novo: sem isto, trocar de conta abriria a pasta da outra
+  // sem puxar nada.
+  jaPuxou = false;
 }
 
 /** Roda o publish/pull do vault jogando a saida no transcript da sessao. */
@@ -266,6 +288,85 @@ function claudeConta(): ClaudeConta {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * Um vault por conta
+ *
+ * A pasta no disco nao sabe de conta nenhuma: por isso, ate aqui, trocar de
+ * login mostrava exatamente os mesmos arquivos — a trava do `comDono()`
+ * protegia o BANCO (o publish nao mandava nada para a conta errada), nunca a
+ * tela. Agora cada conta tem a sua pasta, e ver o vault do outro deixa de ser
+ * possivel porque nao e a mesma pasta.
+ *
+ * Por padrao a pasta e do app (`%APPDATA%\athena-app\vaults\<id>`) e ninguem
+ * precisa saber onde fica. Quem prefere escolher continua podendo: a escolha
+ * fica anotada em `vaults[id]`.
+ * ------------------------------------------------------------------ */
+
+let uidAtual: string | null = null;
+
+function pastaInternaDoVault(uid: string): string {
+  return path.join(app.getPath("userData"), "vaults", uid);
+}
+
+function guardarVaultDaConta(pasta: string) {
+  const cfg = readConfig();
+  writeConfig(
+    uidAtual
+      ? { ...cfg, vaults: { ...(cfg.vaults ?? {}), [uidAtual]: pasta } }
+      : { ...cfg, vaultPath: pasta },
+  );
+}
+
+/** Desanexa tudo — usado ao sair e ao entrar numa conta que ainda nao tem vault. */
+function soltarVault() {
+  vault = null;
+  runner?.removeAllListeners();
+  runner = null;
+  watcher?.close();
+  watcher = null;
+  statusWatcher?.close();
+  statusWatcher = null;
+  account.espelharSessaoEm(null);
+}
+
+/**
+ * Abre o vault da conta que acabou de ser identificada.
+ *
+ * A MIGRACAO importa: quem ja usava o app tem um `vaultPath` unico, e o
+ * `donos` diz de quem ele e. Adotar essa pasta para a conta dona evita que a
+ * primeira abertura depois desta mudanca mande baixar centenas de MB numa
+ * pasta nova, com a antiga intacta do lado.
+ */
+function abrirVaultDaConta(conta: { id: string; email: string } | null) {
+  uidAtual = conta?.id ?? null;
+  if (!conta) {
+    soltarVault();
+    return;
+  }
+
+  const cfg = readConfig();
+  let alvo = cfg.vaults?.[conta.id];
+
+  if (!alvo && cfg.vaultPath && Vault.isVault(cfg.vaultPath)) {
+    const dono = cfg.donos?.[cfg.vaultPath];
+    if (!dono || dono === conta.email) {
+      alvo = cfg.vaultPath;
+      writeConfig({ ...cfg, vaults: { ...(cfg.vaults ?? {}), [conta.id]: alvo } });
+    }
+  }
+
+  if (alvo && Vault.isVault(alvo)) {
+    if (vault?.root !== alvo) attachVault(alvo);
+  } else {
+    soltarVault();
+  }
+}
+
+/** O `account.ts` ainda recebe o vault (le o `.env.local` dele quando existe). */
+function vaultRootOuVazio(): string {
+  return vault?.root ?? "";
+}
+
 function requireVault(): Vault {
   if (!vault) throw new Error("Nenhum vault selecionado.");
   return vault;
@@ -277,15 +378,15 @@ function requireRunner(): ClaudeRunner {
 }
 
 function registerIpc() {
+  /** Tamanho em disco — a barra do rodape da lateral. */
+  ipcMain.handle("vault:tamanho", () => requireVault().tamanho());
+
   ipcMain.handle("vault:get", async () => {
-    const cfg = readConfig();
-    if (cfg.vaultPath && !vault && Vault.isVault(cfg.vaultPath)) {
-      attachVault(cfg.vaultPath);
-    }
-    // Nao bloqueia a abertura da janela: a arvore aparece e o pull acontece
-    // atras, com a saida no painel da sessao.
+    // Quem escolhe o vault e o login (abrirVaultDaConta): aqui so se responde
+    // qual ficou aberto. Nao bloqueia a janela — a arvore aparece e o pull
+    // acontece atras, com a saida no painel da sessao.
     if (vault) void pullInicial();
-    return { path: vault?.root ?? null, claudeBin: cfg.claudeBin ?? "claude" };
+    return { path: vault?.root ?? null, claudeBin: readConfig().claudeBin ?? "claude" };
   });
 
   ipcMain.handle("vault:pick", async () => {
@@ -300,9 +401,81 @@ function registerIpc() {
         "Essa pasta nao parece o vault do Athena — nao encontrei CLAUDE.md e raw/.",
       );
     }
-    writeConfig({ ...readConfig(), vaultPath: chosen });
+    guardarVaultDaConta(chosen);
     attachVault(chosen);
     return { path: chosen };
+  });
+
+  /**
+   * Primeiro uso — três passos que hoje só existem no terminal (clonar,
+   * `athena login`, `athena pull`) viram pela interface. Ver bootstrap.ts.
+   */
+
+  /** Escolhe uma pasta para NASCER o vault — sem exigir CLAUDE.md/raw/, ao contrário de vault:pick. */
+  ipcMain.handle("vault:escolherPastaNova", async () => {
+    const res = await dialog.showOpenDialog({
+      title: "Escolha (ou crie) uma pasta vazia para o vault novo",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    return res.canceled || !res.filePaths[0] ? null : res.filePaths[0];
+  });
+
+  ipcMain.handle("vault:criarNovo", async (_e, pasta: string) => {
+    await bootstrap.criarVault(pasta);
+    // Mesmo efeito de vault:pick: essa pasta vira o vault ativo, para que o
+    // login e o download (passo seguinte, na mesma tela) já encontrem
+    // `requireVault()` respondendo, sem a pessoa escolher a pasta de novo.
+    guardarVaultDaConta(pasta);
+    attachVault(pasta);
+    return { path: pasta };
+  });
+
+  /**
+   * O caminho sem pergunta nenhuma: o vault nasce dentro dos dados do app.
+   *
+   * Pasta ja existente e nao-vazia e aceita de volta como esta (acontece quando
+   * a pessoa fecha o app no meio do primeiro download e abre de novo); o
+   * `baixarTudo` seguinte completa o que falta sem sobrescrever nada.
+   */
+  ipcMain.handle("vault:criarInterno", async () => {
+    if (!uidAtual) throw new Error("Entre com a conta antes de criar o vault.");
+    const pasta = pastaInternaDoVault(uidAtual);
+    fs.mkdirSync(pasta, { recursive: true });
+    if (!Vault.isVault(pasta)) await bootstrap.criarVault(pasta);
+    guardarVaultDaConta(pasta);
+    attachVault(pasta);
+    return { path: pasta };
+  });
+
+  ipcMain.handle("vault:baixarTudo", async () => {
+    const root = requireVault().root;
+    const r = runner;
+    const resultado = await bootstrap.baixarTudo(root, (linha) => {
+      r?.log(linha);
+      send("bootstrap:linha", linha);
+    });
+    send("vault:changed", null);
+    return resultado;
+  });
+
+  /**
+   * Zip do vault inteiro para a pessoa levar/guardar fora do OneDrive.
+   *
+   * `.athena` fica de fora junto com as pastas de ferramenta: `session.json`
+   * dentro dele carrega o refresh token da conta, e um zip pensado para sair
+   * da maquina (mandar por e-mail, subir num drive) nao pode levar credencial
+   * junto so porque estava na mesma pasta.
+   */
+  ipcMain.handle("vault:exportar", async () => {
+    const v = requireVault();
+    const res = await dialog.showSaveDialog({
+      title: "Exportar vault",
+      defaultPath: path.join(app.getPath("documents"), `${path.basename(v.root)}.zip`),
+      filters: [{ name: "Arquivo zip", extensions: ["zip"] }],
+    });
+    if (res.canceled || !res.filePath) return null;
+    zipPastaStore(v.root, res.filePath, new Set(["node_modules", ".git", ".next", "dist", "release", ".athena"]));
+    return res.filePath;
   });
 
   ipcMain.handle("config:setClaudeBin", async (_e, bin: string) => {
@@ -317,6 +490,14 @@ function registerIpc() {
     writeConfig({ ...readConfig(), claudeBin: bin });
     if (vault) attachVault(vault.root);
     return true;
+  });
+
+  // ---- prefs de exibicao — mesmo athena-app.json, campo `prefs` ----
+  ipcMain.handle("config:getPrefs", (): Prefs => getPrefs(readConfig().prefs));
+  ipcMain.handle("config:setPrefs", (_e, patch: Partial<Prefs>): Prefs => {
+    const salvas = setPrefs(readConfig().prefs, patch);
+    writeConfig({ ...readConfig(), prefs: salvas });
+    return getPrefs(salvas);
   });
 
   ipcMain.handle("fs:tree", (_e, scope: string) => requireVault().tree(scope));
@@ -340,6 +521,9 @@ function registerIpc() {
   );
   ipcMain.handle("fs:rename", (_e, rel: string, nome: string) =>
     requireVault().rename(rel, nome),
+  );
+  ipcMain.handle("fs:mover", (_e, relOrigem: string, relPastaDestino: string) =>
+    requireVault().mover(relOrigem, relPastaDestino),
   );
   ipcMain.handle("fs:trash", async (_e, rel: string) => {
     // Lixeira do Windows, nao unlink: apagar a nota errada com dois cliques
@@ -411,24 +595,32 @@ function registerIpc() {
   );
 
   // ---- conta do Athena (Supabase) — mesma sessao do `athena login` ----
-  ipcMain.handle("account:status", async () =>
-    comDono(await account.status(requireVault().root)),
-  );
-  ipcMain.handle("account:login", async (_e, email: string, password: string) =>
-    comDono(await account.login(requireVault().root, email, password)),
-  );
-  ipcMain.handle("account:signUp", async (_e, email: string, senha: string, nome: string) =>
-    comDono(await account.signUp(requireVault().root, email, senha, nome)),
-  );
+  // Cada handler de conta termina em `abrirVaultDaConta`: e o login que decide
+  // qual pasta o app abre, nao o contrario.
+  ipcMain.handle("account:status", async () => {
+    const conta = await account.status(vaultRootOuVazio());
+    abrirVaultDaConta(conta);
+    return comDono(conta);
+  });
+  ipcMain.handle("account:login", async (_e, email: string, password: string) => {
+    const conta = await account.login(vaultRootOuVazio(), email, password);
+    abrirVaultDaConta(conta);
+    return comDono(conta);
+  });
+  ipcMain.handle("account:signUp", async (_e, email: string, senha: string, nome: string) => {
+    const conta = await account.signUp(vaultRootOuVazio(), email, senha, nome);
+    abrirVaultDaConta(conta);
+    return comDono(conta);
+  });
   // O navegador do sistema, nao uma janela do Electron: Google e GitHub
   // recusam login dentro de webview embutida.
-  ipcMain.handle("account:oauth", async (_e, provider: account.Provedor) =>
-    comDono(
-      await account.oauthLogin(requireVault().root, provider, (url) => {
-        void shell.openExternal(url);
-      }),
-    ),
-  );
+  ipcMain.handle("account:oauth", async (_e, provider: account.Provedor) => {
+    const conta = await account.oauthLogin(vaultRootOuVazio(), provider, (url) => {
+      void shell.openExternal(url);
+    });
+    abrirVaultDaConta(conta);
+    return comDono(conta);
+  });
   ipcMain.handle("account:oauthCancel", () => account.oauthCancel());
   /** Escolhe a imagem e sobe. Devolve null se a pessoa fechou o seletor. */
   ipcMain.handle("account:avatarPick", async () => {
@@ -438,10 +630,10 @@ function registerIpc() {
       filters: [{ name: "Imagens", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }],
     });
     if (res.canceled || !res.filePaths[0]) return null;
-    return comDono(await account.avatarUpload(requireVault().root, res.filePaths[0]));
+    return comDono(await account.avatarUpload(vaultRootOuVazio(), res.filePaths[0]));
   });
   ipcMain.handle("account:avatarRemove", async () =>
-    comDono(await account.avatarRemove(requireVault().root)),
+    comDono(await account.avatarRemove(vaultRootOuVazio())),
   );
   /** "Sim, este vault agora e desta conta" — apaga o aviso de troca. */
   ipcMain.handle("account:assumirVault", (_e, email: string) => {
@@ -452,16 +644,32 @@ function registerIpc() {
   ipcMain.handle(
     "account:update",
     (_e, campos: { email?: string; password?: string; nome?: string }) =>
-      account.updateAccount(requireVault().root, campos),
+      account.updateAccount(vaultRootOuVazio(), campos),
   );
   ipcMain.handle("account:logout", () => {
-    account.logout(requireVault().root);
+    account.logout(vaultRootOuVazio());
+    // Sem soltar o vault, a proxima conta abriria a arvore da anterior ate a
+    // janela recarregar — exatamente o que esta mudanca veio corrigir.
+    soltarVault();
+    uidAtual = null;
     return true;
   });
 
   // ---- glossario: do DISCO, nao do banco ----
   ipcMain.handle("fs:glossario", () => biblioteca.glossario(requireVault()));
   ipcMain.handle("fs:buscar", (_e, termo: string) => requireVault().buscarConteudo(termo));
+
+  // ---- uso do app NESTE APARELHO: posicao de leitura, bookmark, fila de review ----
+  ipcMain.handle("usage:recentes", () => usage.recentes(requireVault()));
+  ipcMain.handle("usage:visitar", (_e, rel: string, pct?: number) =>
+    usage.visitar(requireVault(), rel, pct),
+  );
+  ipcMain.handle("usage:ultimaLeitura", () => usage.ultimaLeitura(requireVault()));
+  ipcMain.handle("usage:termos", () => usage.termos(requireVault()));
+  ipcMain.handle("usage:alternarTermo", (_e, termo: string) =>
+    usage.alternarTermo(requireVault(), termo),
+  );
+  ipcMain.handle("usage:revisao", () => usage.revisao(requireVault()));
 
   // ---- publicacao (Supabase + R2), nao git ----
   ipcMain.handle("publish:run", (_e, name: publish.ScriptName, flags: string[]) =>
@@ -481,16 +689,55 @@ function registerIpc() {
   });
 
   // ---- janela (a moldura e do app, nao do sistema) ----
-  ipcMain.handle("win:close", () => {
-    win?.close();
+  /**
+   * Os controles agem sobre a janela de QUEM chamou, nao sobre `win`.
+   *
+   * Com a aba destacada existindo, `win` deixou de ser "a janela": o X de uma
+   * janela filha fechava a principal, que e o pior defeito possivel num botao
+   * de fechar.
+   */
+  const daChamada = (e: Electron.IpcMainInvokeEvent) => BrowserWindow.fromWebContents(e.sender);
+
+  ipcMain.handle("win:close", (e) => {
+    daChamada(e)?.close();
     return true;
   });
-  ipcMain.handle("win:toggleMaximize", () => {
-    if (!win) return false;
-    if (win.isMaximized()) win.unmaximize();
-    else win.maximize();
-    return win.isMaximized();
+  ipcMain.handle("win:minimize", (e) => {
+    daChamada(e)?.minimize();
+    return true;
   });
+  ipcMain.handle("win:toggleMaximize", (e) => {
+    const j = daChamada(e);
+    if (!j) return false;
+    if (j.isMaximized()) j.unmaximize();
+    else j.maximize();
+    return j.isMaximized();
+  });
+  ipcMain.handle("win:isMaximized", (e) => !!daChamada(e)?.isMaximized());
+
+  /**
+   * Aba arrancada da barra: nasce uma janela com aquela aba dentro.
+   *
+   * A aba viaja como JSON no hash da URL, e nao por IPC depois que a janela
+   * abre, porque a janela nova precisa ja montar com ela — mandar depois faria
+   * a Home piscar antes do conteudo certo.
+   *
+   * A nova janela abre deslocada do cursor e nao exatamente nele: colada no
+   * ponteiro, o primeiro clique cairia dentro dela sem querer.
+   */
+  ipcMain.handle("win:destacar", (e, aba: unknown, x?: number, y?: number) => {
+    const nova = criarJanela("#aba=" + encodeURIComponent(JSON.stringify(aba)));
+    if (typeof x === "number" && typeof y === "number") {
+      const [w, h] = nova.getSize();
+      nova.setPosition(Math.round(x - w / 2), Math.max(0, Math.round(y - 20)));
+    }
+    // A janela de origem perde a aba — quem manda isso e o renderer dela.
+    void e;
+    return true;
+  });
+
+  /** Versao do `package.json`, via Electron — uma fonte so, sem copia na UI. */
+  ipcMain.handle("app:versao", () => app.getVersion());
 
   ipcMain.handle("claude:whoami", () => claudeConta());
 
@@ -552,8 +799,16 @@ function iconePath() {
   return fs.existsSync(p) ? p : undefined;
 }
 
-function createWindow() {
-  win = new BrowserWindow({
+/**
+ * Cria uma janela.
+ *
+ * `hash` carrega a aba destacada (`#aba=<json>`). A janela e a mesma em tudo
+ * — mesmo preload, mesmo HTML —; quem decide abrir so aquela aba e o renderer,
+ * lendo o hash. Assim nao existe "janela de segunda classe": destacada ou nao,
+ * o app inteiro esta ali.
+ */
+function criarJanela(hash = ""): BrowserWindow {
+  const janela = new BrowserWindow({
     width: 1280,
     height: 820,
     minWidth: 940,
@@ -576,12 +831,44 @@ function createWindow() {
   });
 
   if (process.env.ATHENA_DEV) {
-    win.loadURL("http://localhost:5173");
+    janela.loadURL("http://localhost:5173" + hash);
   } else {
-    win.loadFile(path.join(__dirname, "../renderer/index.html"));
+    janela.loadFile(path.join(__dirname, "../renderer/index.html"), { hash: hash.replace(/^#/, "") });
   }
 
-  win.on("closed", () => (win = null));
+  /**
+   * F12 abre o DevTools.
+   *
+   * O menu do Electron foi removido da janela, e com ele foi o Ctrl+Shift+I.
+   * Sem nenhuma porta de entrada, uma tela preta vira adivinhacao: o erro do
+   * renderer existe, so nao ha onde ler. Isto e o unico jeito de ler.
+   */
+  janela.webContents.on("before-input-event", (_e, input) => {
+    if (input.type === "keyDown" && input.key === "F12") janela.webContents.toggleDevTools();
+  });
+
+  // Se o HTML nem carregar, o DevTools tambem nao ajuda — o erro vai para o
+  // terminal de onde o app foi aberto.
+  janela.webContents.on("did-fail-load", (_e, code, desc, url) => {
+    console.error(`[athena] falha ao carregar ${url}: ${desc} (${code})`);
+  });
+
+  // Maximizar nao acontece so pelo botao: o snap do Windows e o duplo clique
+  // na faixa tambem maximizam. Sem avisar o renderer, o icone mentiria.
+  // So para esta janela: maximizar uma nao pode mexer no icone da outra.
+  janela.on("maximize", () => janela.webContents.send("win:maximized", true));
+  janela.on("unmaximize", () => janela.webContents.send("win:maximized", false));
+
+  janela.on("closed", () => {
+    if (win === janela) win = null;
+  });
+
+  return janela;
+}
+
+/** A janela principal — a que carrega o vault e some quando o app fecha. */
+function createWindow() {
+  win = criarJanela();
 }
 
 // Precisa acontecer ANTES do ready: depois, o Chromium ja decidiu o que cada
@@ -594,6 +881,10 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(() => {
+  // A sessao mora com os dados do app, nao dentro do vault: para saber qual
+  // pasta abrir e preciso ja saber quem entrou. Ver account.ts.
+  account.configurarSessao(app.getPath("userData"));
+  account.importarSessaoAntiga(readConfig().vaultPath ?? null);
   // Sem isto o Windows agrupa a janela sob "Electron" na barra de tarefas e
   // mostra o icone padrao mesmo com `icon` definido acima.
   if (process.platform === "win32") app.setAppUserModelId("br.athena.app");

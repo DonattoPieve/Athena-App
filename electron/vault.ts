@@ -90,6 +90,40 @@ export class Vault {
     );
   }
 
+  /**
+   * Bytes ocupados pelo vault.
+   *
+   * Ignora `node_modules` e `.git`: eles sao do athena-web e do controle de
+   * versao, nao do conteudo, e sozinhos passariam de tudo que a pessoa
+   * escreveu — a barra mostraria o peso da ferramenta, nao do estudo.
+   */
+  async tamanho(): Promise<number> {
+    const PULAR = new Set(["node_modules", ".git", ".next", "dist", "release"]);
+    let total = 0;
+    const andar = async (dir: string) => {
+      let itens: fsSync.Dirent[];
+      try {
+        itens = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const it of itens) {
+        if (PULAR.has(it.name)) continue;
+        const p = path.join(dir, it.name);
+        if (it.isDirectory()) await andar(p);
+        else if (it.isFile()) {
+          try {
+            total += (await fs.stat(p)).size;
+          } catch {
+            /* arquivo sumiu no meio da varredura — nao e erro */
+          }
+        }
+      }
+    };
+    await andar(this.root);
+    return total;
+  }
+
   /** Resolve um caminho relativo garantindo que ele nao escapa da raiz. */
   resolve(rel: string): string {
     const root = path.resolve(this.root);
@@ -239,9 +273,21 @@ export class Vault {
     }
     if (wikiFolder) {
       const page = path.posix.join(wikiFolder, `${lesson}.md`);
-      const review = path.posix.join(wikiFolder, `${lesson}-review.md`);
       if (await this.exists(page)) t.wikiPage = page;
-      if (await this.exists(review)) t.wikiReview = review;
+
+      /**
+       * O review mora em `wiki/reviews/<MATERIA>/`, nao mais ao lado da aula.
+       *
+       * O lugar antigo continua sendo procurado: vault que ainda nao passou
+       * pela mudanca tem review dentro da pasta da materia, e `athena delete`
+       * precisa achar o arquivo para remover — nao achar significaria deixar
+       * um review orfao apontando para uma aula que nao existe mais.
+       */
+      const materia = wikiFolder.split("/").pop() ?? "";
+      const novo = path.posix.join("wiki/reviews", materia, `${lesson}-review.md`);
+      const antigo = path.posix.join(wikiFolder, `${lesson}-review.md`);
+      if (await this.exists(novo)) t.wikiReview = novo;
+      else if (await this.exists(antigo)) t.wikiReview = antigo;
     }
     if (mirrorFolder) {
       const page = path.posix.join(mirrorFolder, `${lesson}.md`);
@@ -301,6 +347,51 @@ export class Vault {
     const abs = this.resolve(destino);
     if (fsSync.existsSync(abs)) throw new Error(`Ja existe: ${destino}`);
     await fs.rename(this.resolve(rel), abs);
+    return destino;
+  }
+
+  /**
+   * Move arquivo ou pasta para dentro de outra pasta (drag-and-drop no explorer).
+   *
+   * Reusa `assertWritable` nos dois lados — origem e destino tem que estar em
+   * area gravavel (raw/, menos raw/INATEL), do contrario dava para "mover"
+   * material do professor pra fora do lugar dele, ou depositar coisa dentro
+   * da wiki gerada. `resolve()` garante que nenhum dos dois escapa da raiz.
+   */
+  async mover(relOrigem: string, relPastaDestino: string): Promise<string> {
+    this.assertWritable(relOrigem, "Mover");
+    this.assertWritable(relPastaDestino, "Mover");
+
+    const origemAbs = this.resolve(relOrigem);
+    const destinoDirAbs = this.resolve(relPastaDestino);
+
+    if (!fsSync.existsSync(destinoDirAbs) || !fsSync.statSync(destinoDirAbs).isDirectory()) {
+      throw new Error(`Destino nao e uma pasta: ${relPastaDestino}`);
+    }
+    if (!fsSync.existsSync(origemAbs)) {
+      throw new Error(`Nao encontrado: ${relOrigem}`);
+    }
+
+    // Soltar uma pasta dentro dela mesma (ou de uma subpasta sua) o SO ate
+    // aceita, mas o resultado e a pasta sumir de onde estava sem aparecer em
+    // lugar nenhum — bloqueia antes de chegar la.
+    const origemComBarra = origemAbs + path.sep;
+    if (destinoDirAbs === origemAbs || destinoDirAbs.startsWith(origemComBarra)) {
+      throw new Error("Nao e possivel mover uma pasta para dentro dela mesma.");
+    }
+
+    const nome = path.posix.basename(relOrigem);
+    const destino = path.posix.join(relPastaDestino, nome);
+    const destinoAbs = this.resolve(destino);
+
+    // Mesma pasta de origem: nao e erro, mas tambem nao ha o que fazer.
+    if (destinoAbs === origemAbs) return relOrigem;
+
+    if (fsSync.existsSync(destinoAbs)) {
+      throw new Error(`Ja existe "${nome}" em ${relPastaDestino}.`);
+    }
+
+    await fs.rename(origemAbs, destinoAbs);
     return destino;
   }
 

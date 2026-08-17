@@ -1,0 +1,262 @@
+/**
+ * Home — tela de abertura, reconstruida a partir do mockup aprovado.
+ * Prefixo `home-` pra nao colidir com nada de src/index.css (que ainda tem
+ * as classes .hero/.stat/.materia do desenho antigo, sem uso aqui).
+ *
+ * Cores e raios sempre em var(--c-*) / var(--r-*): o app tem 7 paletas x 2
+ * temas (ver [data-palette] em index.css) e hex fixo aqui quebraria a
+ * maioria delas. A unica excecao e a mesma que o resto do app ja usa para
+ * "removido" (#e24b4a): cor de estado, nao de marca, igual nas 14 combinacoes.
+ */
+
+.home {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- saudacao + titulo ---- */
+.home-topo {
+  display: flex;
+  flex-direction: column;
+}
+.home-saudacao {
+  margin: 0;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+.home-titulo {
+  margin: 6px 0 6px;
+  font-size: 1.65rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.home-resumo {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-muted);
+}
+
+/* ---- busca em destaque ----
+   Campo grande (~50px) com icone fixo a esquerda e o atalho a direita;
+   a borda so vira roxa (--c-accent) no foco, pra nao competir com o resto
+   da tela quando ninguem esta digitando. */
+.home-search-wrap {
+  position: relative;
+}
+.home-search {
+  width: 100%;
+  height: 50px;
+  padding: 0 88px 0 44px;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--c-border);
+  background: var(--c-card);
+  color: var(--c-text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 160ms, box-shadow 160ms;
+}
+.home-search::placeholder {
+  color: var(--c-muted);
+}
+.home-search:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 15%, transparent);
+}
+.home-search-icone {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  color: var(--c-muted);
+  pointer-events: none;
+}
+.home-search-icone svg {
+  width: 18px;
+  height: 18px;
+}
+.home-search-atalho {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ---- atalhos de acao: 4 cartoes, titulo + subtitulo ---- */
+.home-acoes {
+  display: grid;
+  /* Quatro em uma linha ate 900px do miolo. `auto-fit` quebrava em 3+1 numa
+     janela normal, e um cartao sozinho na segunda fila parece defeito. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.home-acao {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xl);
+  background: var(--c-card);
+  color: var(--c-text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms, background-color 140ms;
+}
+.home-acao:hover {
+  border-color: color-mix(in srgb, var(--c-accent) 50%, transparent);
+  background: var(--c-surface);
+}
+.home-acao-titulo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.home-acao-titulo svg {
+  width: 15px;
+  height: 15px;
+  color: var(--c-accent);
+}
+.home-acao-sub {
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+/* ---- continue de onde parou ----
+   Sem miniatura: o dado nao existe na API, entao o cartao fica so com texto
+   e a barra — inventar uma imagem aqui seria placeholder disfarcado. */
+.home-continuar {
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.home-continuar-materia {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--c-accent);
+}
+.home-continuar-titulo {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--c-text);
+}
+.home-continuar-data {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--c-muted);
+}
+.home-continuar-progresso {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+.home-continuar-progresso .barra {
+  flex: 1;
+}
+.home-continuar-pct {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--c-accent);
+}
+
+/* ---- badge "N aguardando revisao" ---- */
+.home-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--c-accent-light);
+  color: var(--c-accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---- link "ver mais" no rodape dos cartoes ----
+   Vira <span> inerte (sem cursor, sem sublinhado no hover) quando a tela nao
+   tem um handler real pra oferecer — melhor que um botao que finge navegar. */
+.home-vermais {
+  display: inline-block;
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--c-accent);
+  font-family: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+button.home-vermais:hover {
+  text-decoration: underline;
+}
+.home-vermais-inerte {
+  color: var(--c-muted);
+  cursor: default;
+}
+
+/* ---- seu vault: 3 linhas numero + rotulo + observacao ---- */
+.home-vault-linha {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--c-border);
+}
+.home-vault-linha:last-child {
+  border-bottom: none;
+}
+.home-vault-titulo {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--c-text);
+}
+.home-vault-titulo strong {
+  color: var(--c-accent);
+  font-weight: 700;
+}
+.home-vault-sub {
+  margin: 1px 0 0;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+
+/* ---- atividade recente: hora + descricao, uma linha por evento ---- */
+.home-atividade {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.home-atividade-linha {
+  display: flex;
+  gap: 8px;
+  font-size: 11.5px;
+}
+.home-atividade-hora {
+  flex: 0 0 auto;
+  color: var(--c-muted);
+}
+.home-atividade-texto {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--c-text);
+}
+/* Mesmo hex de erro/remocao do resto do app (ver src/styles/config.css) —
+   cor de estado, nao de marca, por isso e a unica excecao a var(--c-*). */
+.home-atividade-texto[data-removido="true"] {
+  color: #e24b4a;
+}
+
+/* Miolo estreito: dois em cima, dois embaixo — ainda simetrico. */
+@media (max-width: 900px) {
+  .home-acoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
