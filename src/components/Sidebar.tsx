@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { api, type Account } from "../lib/api";
-import { t } from "../lib/i18n";
+import { api, type Account, type EstadoAtualizacao } from "../lib/api";
+import { t, tf } from "../lib/i18n";
 import { Avatar } from "./Avatar";
 import {
   IconArquivos,
@@ -102,7 +102,69 @@ export function Sidebar({
       <div className="lateral-explorer">{explorer}</div>
 
       <VaultRodape caminho={vaultPath} />
+      <BotaoAtualizacao />
     </aside>
+  );
+}
+
+/**
+ * Atualização do app, no canto de baixo da lateral.
+ *
+ * Fica no canto justamente porque atualização não é urgente: interromper uma
+ * nota aberta com um aviso no meio da tela seria desproporcional. O que faz o
+ * olho encontrar sozinho é o brilho — ele só existe quando há algo baixado
+ * esperando, e some quando não há.
+ *
+ * Parado, o botão continua servindo: procura agora, em vez de esperar a
+ * checagem automática (de 6 em 6 horas). Um ícone que não faz nada na maior
+ * parte do tempo seria pior que ícone nenhum.
+ */
+function BotaoAtualizacao() {
+  const [estado, setEstado] = useState<EstadoAtualizacao>({ fase: "ocioso" });
+  const [erro, setErro] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.app.atualizacao().then(setEstado).catch(() => {});
+    return api.app.onAtualizacao((e) => {
+      setEstado(e);
+      setErro(null);
+    });
+  }, []);
+
+  const texto =
+    estado.fase === "pronta"
+      ? tf("Atualizar para a v{versao}", { versao: estado.versao })
+      : estado.fase === "baixando"
+        ? tf("baixando… {pct}%", { pct: estado.pct })
+        : estado.fase === "checando"
+          ? t("procurando…")
+          : estado.fase === "atual"
+            ? t("tudo em dia")
+            : t("Procurar atualizações");
+
+  return (
+    <button
+      className="lateral-atualizacao"
+      data-fase={estado.fase}
+      title={erro ?? texto}
+      onClick={() => {
+        setErro(null);
+        if (estado.fase === "pronta") {
+          api.app
+            .instalarAtualizacao()
+            .catch((e: Error) => setErro(e.message.replace(/^Error: /, "")));
+        } else if (estado.fase === "ocioso" || estado.fase === "atual") {
+          api.app.procurarAtualizacao().catch(() => {});
+        }
+      }}
+    >
+      <span className="lateral-atualizacao-luz" aria-hidden>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 19h14" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+      <span className="truncar">{erro ?? texto}</span>
+    </button>
   );
 }
 

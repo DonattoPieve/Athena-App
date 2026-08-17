@@ -90,8 +90,11 @@ const EN: Record<string, string> = {
   "Escolher uma pasta vazia — o app cria a estrutura e baixa tudo da sua conta":
     "Choose an empty folder — the app creates the structure and downloads everything from your account",
   "Já tenho um vault": "I already have a vault",
-  "baixando atualização… {pct}%": "downloading update… {pct}%",
-  "Atualizar para a v{versao} e reiniciar": "Update to v{versao} and restart",
+  "Procurar atualizações": "Check for updates",
+  "procurando…": "checking…",
+  "tudo em dia": "up to date",
+  "baixando… {pct}%": "downloading… {pct}%",
+  "Atualizar para a v{versao}": "Update to v{versao}",
   "Já tenho um vault neste PC": "I already have a vault on this PC",
   "Esta conta ainda não tem vault neste computador.":
     "This account has no vault on this computer yet.",

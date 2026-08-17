@@ -29,6 +29,7 @@ const api = {
   app: {
     versao: () => ipcRenderer.invoke("app:versao"),
     atualizacao: () => ipcRenderer.invoke("app:atualizacao"),
+    procurarAtualizacao: () => ipcRenderer.invoke("app:procurarAtualizacao"),
     instalarAtualizacao: () => ipcRenderer.invoke("app:instalarAtualizacao"),
     onAtualizacao: (cb: (e: unknown) => void) => {
       const handler = (_: unknown, e: unknown) => cb(e);

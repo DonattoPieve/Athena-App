@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  api,
-  type EstadoAtualizacao,
-  type Job,
-  type Line,
-  type SessionEvent,
-  type SessionState,
-} from "../lib/api";
+import { api, type Job, type Line, type SessionEvent, type SessionState } from "../lib/api";
 import { etapas, progresso, rotuloAtual, temMarcos } from "../lib/progresso";
 import { t, tf } from "../lib/i18n";
 import { IconConfig, IconPerfil } from "./icons";
@@ -58,8 +51,6 @@ export function TaskCenter({
   const [lines, setLines] = useState<Line[]>([]);
   const [state, setState] = useState<SessionState | null>(null);
   const [queue, setQueue] = useState<Job[]>([]);
-  const [atualizacao, setAtualizacao] = useState<EstadoAtualizacao>({ fase: "ocioso" });
-  const [erroAtualizar, setErroAtualizar] = useState<string | null>(null);
   /** Etapa -> hora em que ela apareceu. Só do que foi visto ao vivo. */
   const [horas, setHoras] = useState<Record<string, string>>({});
   const vistas = useRef(new Set<string>());
@@ -78,18 +69,6 @@ export function TaskCenter({
     return () => {
       vivo = false;
     };
-  }, []);
-
-  /**
-   * Atualização do app.
-   *
-   * O rodapé é o lugar certo: fica sempre visível, ao lado da versão que está
-   * rodando, e não interrompe nada. Um modal "atualize agora" no meio de uma
-   * nota aberta seria o oposto do que este app promete.
-   */
-  useEffect(() => {
-    api.app.atualizacao().then(setAtualizacao).catch(() => {});
-    return api.app.onAtualizacao(setAtualizacao);
   }, []);
 
   useEffect(() => {
@@ -235,28 +214,6 @@ export function TaskCenter({
           </button>
         </section>
       </div>
-
-      {atualizacao.fase === "baixando" && (
-        <p className="tc-atualizacao">
-          {tf("baixando atualização… {pct}%", { pct: atualizacao.pct })}
-        </p>
-      )}
-      {atualizacao.fase === "pronta" && (
-        <div className="tc-atualizacao">
-          <button
-            className="link-btn"
-            onClick={() => {
-              setErroAtualizar(null);
-              api.app
-                .instalarAtualizacao()
-                .catch((e: Error) => setErroAtualizar(e.message.replace(/^Error: /, "")));
-            }}
-          >
-            {tf("Atualizar para a v{versao} e reiniciar", { versao: atualizacao.versao })}
-          </button>
-          {erroAtualizar && <span className="tc-atualizacao-erro">{erroAtualizar}</span>}
-        </div>
-      )}
 
       <footer className="taskcenter-rodape">
         <span>{versao ? `Athena v${versao}` : "Athena"}</span>

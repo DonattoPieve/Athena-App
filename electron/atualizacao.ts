@@ -30,6 +30,10 @@ import { autoUpdater } from "electron-updater";
 
 export type EstadoAtualizacao =
   | { fase: "ocioso" }
+  /** Procurando agora — quase sempre porque a pessoa clicou. */
+  | { fase: "checando" }
+  /** Procurou e não havia nada. Volta para "ocioso" sozinho. */
+  | { fase: "atual" }
   | { fase: "baixando"; pct: number }
   | { fase: "pronta"; versao: string }
   | { fase: "erro"; mensagem: string };
@@ -58,6 +62,35 @@ export function iniciarAtualizador(opcoes: {
 
   ipcMain.handle("app:atualizacao", () => estado);
 
+  /**
+   * "Tudo em dia" não pode ficar na tela para sempre: ela responde a um
+   * clique, e uma resposta que não some vira estado permanente mentiroso.
+   */
+  let relogio: NodeJS.Timeout | null = null;
+  function voltarParaOcioso() {
+    if (relogio) clearTimeout(relogio);
+    relogio = setTimeout(() => mudar({ fase: "ocioso" }), 5000);
+  }
+
+  /**
+   * Checagem manual, pelo ícone da barra lateral.
+   *
+   * O automático roda a cada 6 h; querer conferir na hora é legítimo, e sem
+   * isto o ícone parado seria um botão sem função na maior parte do tempo.
+   */
+  ipcMain.handle("app:procurarAtualizacao", async () => {
+    if (!app.isPackaged) {
+      // Em desenvolvimento o updater não sobe. Responder alguma coisa é melhor
+      // que um botão que parece quebrado.
+      mudar({ fase: "atual" });
+      voltarParaOcioso();
+      return false;
+    }
+    mudar({ fase: "checando" });
+    await autoUpdater.checkForUpdates().catch(() => {});
+    return true;
+  });
+
   ipcMain.handle("app:instalarAtualizacao", () => {
     if (estado.fase !== "pronta") {
       throw new Error("Não há atualização baixada.");
@@ -85,6 +118,12 @@ export function iniciarAtualizador(opcoes: {
     debug: () => {},
   };
 
+  autoUpdater.on("checking-for-update", () => mudar({ fase: "checando" }));
+  autoUpdater.on("update-available", () => mudar({ fase: "baixando", pct: 0 }));
+  autoUpdater.on("update-not-available", () => {
+    mudar({ fase: "atual" });
+    voltarParaOcioso();
+  });
   autoUpdater.on("download-progress", (p) => {
     mudar({ fase: "baixando", pct: Math.round(p.percent) });
   });
@@ -96,7 +135,9 @@ export function iniciarAtualizador(opcoes: {
     // pode dar certo, e um aviso permanente de algo que o usuário não controla
     // é só ruído.
     log(`[updater] falhou: ${e.message}`);
-    estado = { fase: "ocioso" };
+    // Precisa AVISAR a tela, não só zerar aqui: o ícone ficaria em
+    // "procurando…" para sempre depois de uma checagem que falhou.
+    mudar({ fase: "ocioso" });
   });
 
   const checar = () => {

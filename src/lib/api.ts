@@ -116,6 +116,8 @@ export type ScriptResult = { ok: boolean; output: string; canForce: boolean };
  */
 export type EstadoAtualizacao =
   | { fase: "ocioso" }
+  | { fase: "checando" }
+  | { fase: "atual" }
   | { fase: "baixando"; pct: number }
   | { fase: "pronta"; versao: string }
   | { fase: "erro"; mensagem: string };
@@ -153,6 +155,8 @@ type AthenaBridge = {
   app: {
     versao(): Promise<string>;
     atualizacao(): Promise<EstadoAtualizacao>;
+    /** Procura agora, sem esperar a checagem automática de 6 em 6 horas. */
+    procurarAtualizacao(): Promise<boolean>;
     /** Fecha e instala. Recusa com o Claude Code rodando. */
     instalarAtualizacao(): Promise<boolean>;
     onAtualizacao(cb: (e: EstadoAtualizacao) => void): () => void;

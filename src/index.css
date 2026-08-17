@@ -1644,6 +1644,58 @@ button.leitura-material:hover {
   padding-top: 8px;
 }
 
+.lateral-atualizacao {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 20px);
+  margin: 0 10px 10px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-lg);
+  background: none;
+  color: var(--c-muted);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.lateral-atualizacao:hover { background: var(--c-surface); color: var(--c-text); }
+.lateral-atualizacao-luz {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--c-surface);
+}
+
+/* Com atualização baixada o ícone pulsa. O anel cresce e some, em vez de
+   piscar: piscar puxa o olho o tempo todo, e isto aqui pode ficar horas na
+   tela sem ninguém clicar. */
+.lateral-atualizacao[data-fase="pronta"] {
+  border-color: var(--c-accent-light);
+  color: var(--c-text);
+}
+.lateral-atualizacao[data-fase="pronta"] .lateral-atualizacao-luz {
+  color: var(--c-accent);
+  background: var(--c-accent-light);
+  animation: pulso-atualizacao 2.4s ease-out infinite;
+}
+.lateral-atualizacao[data-fase="baixando"] .lateral-atualizacao-luz,
+.lateral-atualizacao[data-fase="checando"] .lateral-atualizacao-luz {
+  color: var(--c-accent);
+}
+@keyframes pulso-atualizacao {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c-accent) 50%, transparent); }
+  70%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--c-accent) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c-accent) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lateral-atualizacao[data-fase="pronta"] .lateral-atualizacao-luz { animation: none; }
+}
+
 .lateral-vault {
   flex: 0 0 auto;
   margin: 0 10px 10px;
