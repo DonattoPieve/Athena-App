@@ -21,6 +21,7 @@ import * as publish from "./publish";
 import * as biblioteca from "./biblioteca";
 import * as usage from "./usage";
 import * as bootstrap from "./bootstrap";
+import * as materiais from "./materiais";
 import { iniciarAtualizador } from "./atualizacao";
 import { getPrefs, setPrefs, zipPastaStore, type Prefs, type PrefsSalvas } from "./prefs";
 
@@ -206,7 +207,8 @@ async function pullInicial() {
   if (readConfig().autoPull === false) return;
   if (runner?.busy) return; // nunca mexer em arquivo no meio de um ingest
   if (!account.hasSession(vault.root)) return; // sem conta nao ha o que puxar
-  if (!publish.scriptExists(vault.root, "pull")) return;
+  // Sem o script do vault o pull acontece por dentro do app — nao ha mais
+  // motivo para desistir aqui.
 
   runner?.log("Puxando do banco (abertura do app)...");
   const res = await runScript("pull", []);
@@ -328,6 +330,8 @@ function soltarVault() {
   statusWatcher?.close();
   statusWatcher = null;
   account.espelharSessaoEm(null);
+  // A listagem do R2 e o token são da conta que estava aberta.
+  materiais.esquecer();
 }
 
 /**
@@ -580,6 +584,15 @@ function registerIpc() {
           if (copia) runner?.log(`Copia guardada em ${copia}`);
         }
       }
+      // O Claude Code lê o PDF pelo caminho de verdade (`raw/INATEL/...`), não
+      // pelo cache. Num PC novo esse arquivo pode não ter descido ainda — e um
+      // ingest sem o material do professor gera página com cara de pronta e sem
+      // lastro no que foi cobrado em aula. Por isso a garantia vem antes.
+      if ((cmd === "ingest" || cmd === "redo") && vault) {
+        await materiais
+          .garantirNoVault(vault.root, code, (linha) => runner?.log(linha))
+          .catch(() => 0);
+      }
       return requireRunner().enqueue(cmd, code, lesson);
     },
   );
@@ -676,9 +689,12 @@ function registerIpc() {
   ipcMain.handle("publish:run", (_e, name: publish.ScriptName, flags: string[]) =>
     runScript(name, flags ?? []),
   );
+  // Sempre disponiveis: sem os scripts do vault, o app faz o trabalho por
+  // dentro (ver publish.ts). Responder `false` aqui esconderia o botao numa
+  // maquina onde publicar funciona.
   ipcMain.handle("publish:available", () => ({
-    publish: publish.scriptExists(requireVault().root, "publish"),
-    pull: publish.scriptExists(requireVault().root, "pull"),
+    publish: true,
+    pull: true,
   }));
   ipcMain.handle("config:autoPublish", (_e, on?: boolean) => {
     if (typeof on === "boolean") writeConfig({ ...readConfig(), autoPublish: on });
@@ -780,8 +796,19 @@ function registerProtocol() {
       if (url.host !== "file") return new Response("not found", { status: 404 });
       const rel = decodeURIComponent(url.pathname).replace(/^\/+/, "");
       const abs = requireVault().resolve(rel);
-      if (!fs.existsSync(abs)) return new Response("not found", { status: 404 });
-      return net.fetch(pathToFileURL(abs).toString());
+      if (fs.existsSync(abs)) return net.fetch(pathToFileURL(abs).toString());
+
+      // Não está no disco: pode ser material que mora no R2 e ainda não desceu
+      // nesta máquina. Abrir o arquivo É o gesto que o traz (ver materiais.ts);
+      // da segunda vez em diante sai do cache, sem rede.
+      const doCache = await materiais
+        .garantirParaLeitura(requireVault().root, rel)
+        .catch((e: Error) => {
+          runner?.log(`Não consegui trazer ${rel}: ${e.message}`, "error");
+          return null;
+        });
+      if (!doCache) return new Response("not found", { status: 404 });
+      return net.fetch(pathToFileURL(doCache).toString());
     } catch (e) {
       return new Response(String((e as Error).message), { status: 403 });
     }

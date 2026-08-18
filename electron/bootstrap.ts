@@ -1,9 +1,9 @@
 import * as fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import * as path from "node:path";
-import * as crypto from "node:crypto";
 import { app } from "electron";
 import { clienteAutenticado } from "./account";
+import { urlWorker } from "./materiais";
 
 /**
  * Primeiro uso — monta um vault Athena do zero, pela interface.
@@ -144,7 +144,7 @@ export async function baixarTudo(
 ): Promise<ResultadoBootstrap> {
   const stats: ResultadoBootstrap = { criados: 0, iguais: 0, conflitos: [], semR2: false };
 
-  const { supabase, user, session } = await clienteAutenticado(destino);
+  const { supabase, user } = await clienteAutenticado(destino);
   const nome = (user.user_metadata as Record<string, unknown> | undefined)?.name ?? user.email;
   onLinha(`Puxando da conta de ${nome}.`);
 
@@ -211,69 +211,22 @@ export async function baixarTudo(
     );
   }
 
-  // ---------- binários, pelo Worker ----------
-  // Depois do texto, de propósito: se a rede cair no meio do material do
-  // professor, wiki/ e notas já estão no disco e a próxima tentativa só
-  // completa o que falta (nada aqui sobrescreve o que já foi baixado igual).
-  const worker = urlWorker(destino);
-  if (!worker) {
+  // ---------- material pesado: sob demanda, não agora ----------
+  // `raw/INATEL` tem centenas de MB e o primeiro uso não precisa deles: quem
+  // baixa é o próprio ato de abrir o arquivo (ver materiais.ts). Trazer tudo
+  // aqui era meia hora de espera antes de a pessoa ver a primeira página.
+  if (!urlWorker(destino)) {
     stats.semR2 = true;
     onLinha(
-      "O portão do R2 (Worker) ainda não foi publicado — raw/INATEL (material do " +
-        "professor) e raw/attachments (imagens coladas nas notas) NÃO foram baixados. " +
-        "As páginas e as notas de aula funcionam normalmente; falta só isso.",
+      "O portão do R2 (Worker) ainda não foi publicado — o material do professor e " +
+        "os anexos não vão poder ser abertos neste PC. As páginas e as notas funcionam.",
     );
   } else {
-    const grupos: { prefixo: string; rotulo: string; destino: string }[] = [
-      { prefixo: "inatel", rotulo: "raw/INATEL", destino: path.join(destino, "raw", "INATEL") },
-      {
-        prefixo: "raw-attachments",
-        rotulo: "raw/attachments",
-        destino: path.join(destino, "raw", "attachments"),
-      },
-    ];
-
-    for (const { prefixo, rotulo, destino: baseDestino } of grupos) {
-      let objetos: ObjetoRemoto[];
-      try {
-        objetos = await listarNoWorker(worker, session.access_token, prefixo);
-      } catch (e) {
-        // Uma pasta que falha não pode derrubar a outra, nem o pull inteiro: o
-        // texto já está no disco e o resto ainda pode vir.
-        stats.semR2 = true;
-        onLinha(`  ! ${rotulo}: ${(e as Error).message}`);
-        continue;
-      }
-
-      for (const obj of objetos) {
-        if (!obj.rel) continue;
-        const caminho = path.join(baseDestino, ...obj.rel.split("/"));
-        const rotuloArq = `${rotulo}/${obj.rel}`;
-
-        if (fsSync.existsSync(caminho)) {
-          // Compara pelo mesmo hash que o publish gravou como metadado. Só cai
-          // no tamanho quando o objeto subiu antes desse metadado existir — aí
-          // a folga é a mesma que o `athena pull --dry-run` já aceitava.
-          const local = await fs.readFile(caminho);
-          const igual = obj.sha256
-            ? sha256Curto(local) === obj.sha256
-            : local.byteLength === obj.size;
-          if (igual) {
-            stats.iguais++;
-          } else {
-            stats.conflitos.push(rotuloArq);
-            onLinha(`  ! ${rotuloArq} já existe com conteúdo diferente — não sobrescrito`);
-          }
-          continue;
-        }
-
-        await fs.mkdir(path.dirname(caminho), { recursive: true });
-        const bytes = await baixarNoWorker(worker, session.access_token, obj.key);
-        await fs.writeFile(caminho, bytes);
-        stats.criados++;
-        onLinha(`  ↓ ${rotuloArq} (${bytesLegivel(obj.size)})`);
-      }
-    }
+    onLinha(
+      "Material do professor e anexos ficam sob demanda: cada arquivo desce na " +
+        "primeira vez que você o abrir e fica guardado para as próximas — inclusive " +
+        "sem internet.",
+    );
   }
 
   onLinha(
@@ -378,108 +331,6 @@ function mesmoConteudo(
       ),
     );
   return normalizar(data) === normalizar(fmBanco);
-}
-
-/* ------------------------------------------------------------------ *
- * O portão do R2 — um Worker da Cloudflare, e nenhuma credencial aqui
- *
- * Antes este arquivo assinava a requisição do R2 à mão (SigV4) com a access
- * key + secret lidas do `.env.local` do athena-web. Funcionava numa máquina só
- * — a que tinha esse arquivo — que era exatamente o problema do PC novo. E não
- * dava para resolver embutindo a chave no instalador: chave do R2 é simétrica,
- * a mesma que lê também escreve e apaga no bucket inteiro, e não existe versão
- * "pública só de leitura" dela (ao contrário da chave anon do Supabase, que é
- * segura porque o RLS a segura em toda tabela).
- *
- * A saída é `worker/` (ver worker/README.md): o bucket entra no Worker por
- * binding, o app manda o access token da conta, e o Worker só devolve objeto
- * cuja chave comece com `u/<id-da-conta>/`. Aqui não fica segredo nenhum — a
- * URL do Worker é pública e sozinha não abre nada.
- * ------------------------------------------------------------------ */
-
-/**
- * Endereço do Worker, embutido no app.
- *
- * Preencha depois do `npx wrangler deploy` (o comando imprime a URL). Vazio, o
- * app segue funcionando e só avisa que o material do professor não veio — um
- * instalador sem esta linha é um instalador com um recurso a menos, não um
- * instalador quebrado.
- */
-const WORKER_PADRAO = "https://athena-r2.donatto-athena.workers.dev";
-
-/**
- * Dá para apontar para outro Worker sem recompilar: variável de ambiente, ou
- * `ATHENA_R2_WORKER=` no `.env.local` de quem ainda tem o athena-web clonado.
- * Serve para testar um deploy novo antes de trocar o do instalador.
- */
-function urlWorker(vaultRoot: string): string {
-  const doArquivo = lerEnvLocal(path.join(vaultRoot, "athena-web", ".env.local"));
-  const url = process.env.ATHENA_R2_WORKER || doArquivo.ATHENA_R2_WORKER || WORKER_PADRAO;
-  return url.replace(/\/+$/, "");
-}
-
-function lerEnvLocal(arquivo: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!fsSync.existsSync(arquivo)) return out;
-  for (const linha of fsSync.readFileSync(arquivo, "utf8").split("\n")) {
-    const l = linha.trim();
-    if (!l || l.startsWith("#")) continue;
-    const i = l.indexOf("=");
-    if (i > 0) out[l.slice(0, i).trim()] = l.slice(i + 1).trim();
-  }
-  return out;
-}
-
-type ObjetoRemoto = {
-  /** Chave completa no bucket, já com o `u/<id>/` na frente. */
-  key: string;
-  /** Caminho dentro da pasta local (`C09-.../aula.pdf`). */
-  rel: string;
-  size: number;
-  /** sha256 curto que o publish gravou como metadado; null nos objetos antigos. */
-  sha256: string | null;
-};
-
-/** Mesmo hash do `athena-web/scripts/lib/r2.mjs` — 32 primeiros hex do sha256. */
-function sha256Curto(bytes: Buffer): string {
-  return crypto.createHash("sha256").update(bytes).digest("hex").slice(0, 32);
-}
-
-/** Traduz a resposta do Worker para algo que faça sentido na tela. */
-async function erroDoWorker(resp: Response, oque: string): Promise<Error> {
-  if (resp.status === 401) return new Error("Sessão expirada. Entre de novo e repita.");
-  if (resp.status === 403) return new Error("O Worker recusou: esse arquivo não é desta conta.");
-  let detalhe = "";
-  try {
-    detalhe = ((await resp.json()) as { erro?: string }).erro ?? "";
-  } catch {
-    // resposta sem JSON (502 da Cloudflare, por exemplo) — o status já diz o bastante
-  }
-  return new Error(`${oque} falhou (HTTP ${resp.status}${detalhe ? `: ${detalhe}` : ""}).`);
-}
-
-async function listarNoWorker(
-  worker: string,
-  token: string,
-  prefixo: string,
-): Promise<ObjetoRemoto[]> {
-  const resp = await fetch(`${worker}/list?prefixo=${encodeURIComponent(prefixo)}`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!resp.ok) throw await erroDoWorker(resp, "a listagem");
-  const { objetos } = (await resp.json()) as { objetos: ObjetoRemoto[] };
-  return objetos ?? [];
-}
-
-async function baixarNoWorker(worker: string, token: string, key: string): Promise<Buffer> {
-  // A chave vai em query: nome de arquivo do INATEL tem acento, espaço e
-  // parêntese, e no caminho da URL isso passaria por normalização antes de
-  // chegar no Worker.
-  const resp = await fetch(`${worker}/f?k=${encodeURIComponent(key)}`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!resp.ok) throw await erroDoWorker(resp, `o download de "${key}"`);
-  return Buffer.from(await resp.arrayBuffer());
 }
 
 function bytesLegivel(n: number): string {

@@ -1,12 +1,12 @@
 /**
  * Teste do Worker, sem Cloudflare e sem rede.
  *
- *   npm run test:worker     (na raiz do athena-app)
+ *   node worker/teste.mjs
  *
  * Roda o `src/index.js` de verdade contra um bucket de mentira e um Supabase
  * de mentira, e cobre o que realmente pode quebrar: quem não tem token, quem
  * tem token de outra conta, e nome de arquivo com acento e espaço — que é a
- * regra, e não a exceção, no material do INATEL.
+ * regra e a exceção do vault do INATEL.
  */
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -36,6 +36,14 @@ const BUCKET = {
       truncated: fim < todas.length,
       cursor: fim < todas.length ? String(fim) : undefined,
     };
+  },
+  async put(key, body, opcoes) {
+    const pedacos = [];
+    for await (const p of body) pedacos.push(Buffer.from(p));
+    objetos.set(key, {
+      corpo: Buffer.concat(pedacos),
+      sha256: opcoes?.customMetadata?.sha256 ?? null,
+    });
   },
   async get(key) {
     const o = objetos.get(key);
@@ -76,10 +84,14 @@ guardar(`u/${A}/inatel/T02-Redes/01 - Introdução.pdf`, "pdf-A3", "h3");
 guardar(`u/${A}/raw-attachments/colada.png`, "png-A", "h4");
 guardar(`u/${B}/inatel/D01-Outra-Materia/aula.pdf`, "pdf-B", "h5");
 
-const chamar = (caminho, token) =>
+const chamar = (caminho, token, init = {}) =>
   worker.fetch(
     new Request(`https://athena-r2.exemplo.workers.dev${caminho}`, {
-      headers: token ? { authorization: `Bearer ${token}` } : {},
+      ...init,
+      headers: {
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(init.headers ?? {}),
+      },
     }),
     env,
   );
@@ -154,9 +166,50 @@ await caso("chave inventada dentro da própria conta dá 404", async () => {
 
 await caso("passeio por pasta (../) não escapa da conta", async () => {
   const r = await chamar(`/f?k=${encodeURIComponent(`u/${B}/../${A}/inatel/x.pdf`)}`, "token-B");
-  // O R2 trata a chave como texto, não como caminho: não existe objeto com
-  // esse nome, e o prefixo continua sendo o da própria conta.
+  // A chave não começa com `u/<B>/` depois do `..`? Começa — mas o R2 trata a
+  // chave como texto, não como caminho: não existe objeto com esse nome.
   assert.ok(r.status === 403 || r.status === 404, `veio ${r.status}`);
+});
+
+/* ---------- gravar (o publish do app) ---------- */
+
+await caso("grava na própria conta e lê de volta", async () => {
+  const key = `u/${A}/raw-attachments/nova imagem (1).png`;
+  const r = await chamar(`/f?k=${encodeURIComponent(key)}`, "token-A", {
+    method: "PUT",
+    body: "conteudo-novo",
+    headers: { "x-athena-sha256": "hnovo", "content-type": "image/png" },
+  });
+  assert.equal(r.status, 200, await r.text());
+
+  const volta = await chamar(`/f?k=${encodeURIComponent(key)}`, "token-A");
+  assert.equal(await volta.text(), "conteudo-novo");
+  assert.equal(volta.headers.get("x-athena-sha256"), "hnovo");
+});
+
+await caso("não grava na pasta de outra conta", async () => {
+  const key = `u/${A}/inatel/invadido.pdf`;
+  const r = await chamar(`/f?k=${encodeURIComponent(key)}`, "token-B", {
+    method: "PUT",
+    body: "lixo",
+  });
+  assert.equal(r.status, 403);
+  assert.equal(objetos.has(key), false, "gravou mesmo com 403");
+});
+
+await caso("gravar sem token dá 401", async () => {
+  const r = await chamar(`/f?k=${encodeURIComponent(`u/${A}/inatel/x.pdf`)}`, null, {
+    method: "PUT",
+    body: "lixo",
+  });
+  assert.equal(r.status, 401);
+});
+
+await caso("apagar não existe", async () => {
+  const r = await chamar(`/f?k=${encodeURIComponent(`u/${A}/inatel/x.pdf`)}`, "token-A", {
+    method: "DELETE",
+  });
+  assert.equal(r.status, 405);
 });
 
 /* ---------- ponta a ponta: o mesmo caminho que o app faz ---------- */
