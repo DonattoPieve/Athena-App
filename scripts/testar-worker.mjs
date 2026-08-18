@@ -108,5 +108,39 @@ for (const grupo of ["inatel", "raw-attachments"]) {
   if (!ok) falhas++;
 }
 
-console.log(falhas ? `\n${falhas} problema(s).\n` : "\nPortão funcionando. Um PC novo baixa tudo.\n");
+/* ---------- 5. gravar: o caminho da publicação ---------- */
+// Grava um arquivo minúsculo de teste. Fica no bucket (o portão não apaga, de
+// propósito) — daí o nome começar com ponto e dizer o que é: nada do vault o
+// enxerga, e quem abrir o bucket entende na hora por que ele está lá.
+{
+  const key = `u/${sessao.user.id}/raw-attachments/.teste-de-escrita-do-app.txt`;
+  const corpo = `escrito pelo teste em ${new Date().toISOString()}`;
+  const hash = createHash("sha256").update(corpo).digest("hex").slice(0, 32);
+
+  const posto = await fetch(`${WORKER}/f?k=${encodeURIComponent(key)}`, {
+    method: "PUT",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "x-athena-sha256": hash,
+      "content-type": "text/plain",
+    },
+    body: corpo,
+  });
+  console.log(`\nescrita: PUT -> ${posto.status}`);
+  if (!posto.ok) {
+    console.error(`  falhou: ${await posto.text()}`);
+    console.error("  (se deu 405, o Worker no ar é o antigo — rode `npx wrangler deploy` em worker/)");
+    falhas++;
+  } else {
+    const volta = await fetch(`${WORKER}/f?k=${encodeURIComponent(key)}`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const texto = await volta.text();
+    const ok = texto === corpo && volta.headers.get("x-athena-sha256") === hash;
+    console.log(`  releu igual e com o hash certo: ${ok ? "sim" : "NÃO"}`);
+    if (!ok) falhas++;
+  }
+}
+
+console.log(falhas ? `\n${falhas} problema(s).\n` : "\nPortão funcionando, leitura e escrita.\n");
 process.exit(falhas ? 1 : 0);

@@ -23,6 +23,17 @@ function gravavel(rel: string) {
   return GRAVAVEIS.some((p) => rel === p || rel.startsWith(p + "/"));
 }
 
+/**
+ * Apagar vale numa área maior que escrever — ver `isDeletable` no vault.ts.
+ *
+ * A wiki é somente leitura porque quem escreve nela é o ingest. Mas tirar do
+ * disco uma página que não deveria estar lá é legítimo, e sem isto a única
+ * saída era abrir o Explorer do Windows por fora do app.
+ */
+function apagavel(rel: string) {
+  return gravavel(rel) || rel === "wiki" || rel.startsWith("wiki/");
+}
+
 type Criando = { dir: string; tipo: "pasta" | "nota" } | null;
 
 type Props = {
@@ -171,7 +182,7 @@ export function Explorer({
         label: node.dir ? t("Apagar pasta") : t("Apagar"),
         hint: t("lixeira"),
         danger: true,
-        disabled: !podeMexer,
+        disabled: !apagavel(node.rel),
         onClick: async () => {
           const ok = await confirmar({
             titulo: node.dir
@@ -181,9 +192,13 @@ export function Explorer({
               ? t("A pasta e tudo que está dentro dela vão para a lixeira do Windows.")
               : t("O arquivo vai para a lixeira do Windows."),
             detalhe: node.rel,
-            nota: t(
-              "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no próximo publish, que espelha o disco.",
-            ),
+            nota: node.rel.startsWith("wiki/")
+              ? t(
+                  "Dá para restaurar pela lixeira. Como a wiki é espelho do banco, o que você apagar aqui volta no próximo pull — para sair de vez, publique depois de apagar.",
+                )
+              : t(
+                  "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no próximo publish, que espelha o disco.",
+                ),
             confirmar: t("Apagar"),
           });
           if (ok) void guard(() => api.fs.trash(node.rel));

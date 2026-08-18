@@ -395,9 +395,32 @@ export class Vault {
     return destino;
   }
 
+  /**
+   * Apagar vale numa area maior que escrever.
+   *
+   * `wiki/` e somente leitura para o app porque quem escreve la e o ingest, e
+   * uma edicao manual seria desfeita no proximo `athena generate`. APAGAR e
+   * outra coisa: e a unica forma de tirar do disco uma pagina que nao deveria
+   * existir (duplicata, materia que acabou), e proibir isso obrigava a abrir o
+   * Explorer do Windows por fora do app.
+   *
+   * O risco de apagar aqui e diferente do de escrever, e menor: vai para a
+   * lixeira do sistema (da para restaurar) e o banco continua com a pagina —
+   * o proximo pull a traz de volta se voce nao publicar depois. `raw/INATEL`
+   * fica de fora porque la mora o material do professor, que o app so le.
+   */
+  isDeletable(rel: string): boolean {
+    const norm = rel.split(path.sep).join("/").replace(/^\/+/, "");
+    if (!norm) return false;
+    if (norm === "wiki" || norm.startsWith("wiki/")) return true;
+    return this.isWritable(norm);
+  }
+
   /** Caminho absoluto para a lixeira do sistema (quem chama e o main). */
   trashTarget(rel: string): string {
-    this.assertWritable(rel, "Apagar");
+    if (!this.isDeletable(rel)) {
+      throw new Error(`Apagar nao e permitido em ${rel}.`);
+    }
     return this.resolve(rel);
   }
 

@@ -90,6 +90,8 @@ const EN: Record<string, string> = {
   "Escolher uma pasta vazia — o app cria a estrutura e baixa tudo da sua conta":
     "Choose an empty folder — the app creates the structure and downloads everything from your account",
   "Já tenho um vault": "I already have a vault",
+  "Dá para restaurar pela lixeira. Como a wiki é espelho do banco, o que você apagar aqui volta no próximo pull — para sair de vez, publique depois de apagar.":
+    "You can restore it from the recycle bin. Since the wiki mirrors the database, whatever you delete here comes back on the next pull — to remove it for good, publish after deleting.",
   "Procurar atualizações": "Check for updates",
   "procurando…": "checking…",
   "tudo em dia": "up to date",
