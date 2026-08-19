@@ -1,6 +1,6 @@
 {
   "name": "athena-app",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": true,
   "description": "Cliente desktop do vault Athena — ingest, review, delete e publish sem terminal",
   "main": "dist/electron/main.js",

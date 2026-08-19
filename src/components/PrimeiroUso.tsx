@@ -32,7 +32,7 @@ export function PrimeiroUso({
   onEscolherVaultExistente: () => void | Promise<void>;
   /** Vault criado, logado e com o conteúdo baixado — devolve o controle pro App.tsx. */
   onVaultPronto: (pasta: string) => void;
-  /** Erro do "Já tenho um vault" (vem do `pick()` do App.tsx — pasta sem CLAUDE.md/raw/, etc). */
+  /** Erro do "Já tenho um vault" (vem do `pick()` do App.tsx — pasta sem CLAUDE.md/Notes/, etc). */
   erro?: string | null;
 }) {
   const [passo, setPasso] = useState<Passo>({ tipo: "escolha" });
@@ -147,7 +147,7 @@ export function PrimeiroUso({
           {r.semR2 && (
             <p className="pu-aviso">
               {t(
-                "O material do professor (raw/INATEL) e os anexos não foram baixados: o portão do " +
+                "O material do professor (Notes/INATEL) e os anexos não foram baixados: o portão do " +
                   "R2 não respondeu. As páginas e as notas de aula funcionam normalmente.",
               )}
             </p>
@@ -190,7 +190,7 @@ export function PrimeiroUso({
           <button className="btn" onClick={() => void onEscolherVaultExistente()}>
             <span className="pu-opcao-titulo">{t("Já tenho um vault neste PC")}</span>
             <span className="pu-opcao-desc">
-              {t("Escolher a pasta que já tem")} <code>CLAUDE.md</code> {t("e")} <code>raw/</code>
+              {t("Escolher a pasta que já tem")} <code>CLAUDE.md</code> {t("e")} <code>Notes/</code>
             </span>
           </button>
         </div>

@@ -35,14 +35,14 @@ import {
 } from "./components/icons";
 import type { Account } from "./lib/api";
 
-type Scope = "raw" | "wiki";
+type Scope = "Notes" | "Resumos";
 
 const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
 const TEXTO = /\.(md|txt)$/i;
 /** O Chromium do Electron desenha todos estes — nao precisa de programa de fora. */
 const IMAGEM = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i;
-/** Editavel = raw/ inteiro menos raw/INATEL — espelha o vault.ts. */
-const EDITAVEL = (rel: string) => rel.startsWith("raw/") && !rel.startsWith("raw/INATEL/");
+/** Editavel = Notes/ inteiro menos Notes/INATEL — espelha o vault.ts. */
+const EDITAVEL = (rel: string) => rel.startsWith("Notes/") && !rel.startsWith("Notes/INATEL/");
 
 /**
  * ABAS
@@ -116,7 +116,7 @@ export default function App() {
   const [conta, setConta] = useState<Account | null | false>(null);
   /** Quem esta logado. Trocar de conta troca de vault — ver o efeito abaixo. */
   const uidConta = conta ? conta.id : null;
-  const [scope, setScope] = useState<Scope>("raw");
+  const [scope, setScope] = useState<Scope>("Notes");
   const [tree, setTree] = useState<TreeNode[]>([]);
   const [subjects, setSubjects] = useState<SubjectRef[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -241,7 +241,7 @@ export default function App() {
   // Lista achatada dos dois escopos — e o que a busca varre.
   useEffect(() => {
     if (!vaultPath) return;
-    Promise.all([api.fs.tree("raw"), api.fs.tree("wiki")])
+    Promise.all([api.fs.tree("Notes"), api.fs.tree("Resumos")])
       .then(([r, w]) => setTodos([...achatar(r), ...achatar(w)]))
       .catch(() => setTodos([]));
   }, [vaultPath, refreshKey]);
@@ -300,7 +300,7 @@ export default function App() {
   const aba = abas.find((a) => a.id === ativa);
   const relAtiva = aba?.tipo === "arquivo" ? aba.rel : null;
 
-  // Texto da aba ativa quando ela e leitura (wiki). A edicao le por conta.
+  // Texto da aba ativa quando ela e leitura (Resumos/). A edicao le por conta.
   useEffect(() => {
     if (!relAtiva || !TEXTO.test(relAtiva)) return;
     api.fs.read(relAtiva).then(setFileText).catch(() => setFileText(""));
@@ -370,7 +370,7 @@ export default function App() {
       ),
       detalhe: rel,
       nota: t(
-        "Sua nota em raw/ e o material oficial não são tocados. A versão atual da página se perde — se ela tem edição sua à mão, copie antes.",
+        "Sua nota em Notes/ e o material oficial não são tocados. A versão atual da página se perde — se ela tem edição sua à mão, copie antes.",
       ),
       confirmar: t("Regerar"),
     });
@@ -489,7 +489,7 @@ export default function App() {
    * assim uma ordem antiga salva nunca esconde um icone recem-criado.
    */
   /**
-   * Miolo da lateral: o alternador raw/wiki mais a arvore, ou a busca.
+   * Miolo da lateral: o alternador Notes/Resumos mais a arvore, ou a busca.
    *
    * O cabecalho (marca, conta, vault) saiu daqui para o `Sidebar`: ele e o
    * mesmo em toda tela, e a lateral so cuida do que muda.
@@ -502,23 +502,23 @@ export default function App() {
             <button
               className="btn"
               style={{ flex: 1, padding: "5px 8px", fontSize: 12 }}
-              data-active={scope === "raw"}
-              onClick={() => setScope("raw")}
+              data-active={scope === "Notes"}
+              onClick={() => setScope("Notes")}
             >
-              raw
+              Notes
             </button>
             <button
               className="btn"
               style={{ flex: 1, padding: "5px 8px", fontSize: 12 }}
-              data-active={scope === "wiki"}
-              onClick={() => setScope("wiki")}
+              data-active={scope === "Resumos"}
+              onClick={() => setScope("Resumos")}
             >
-              wiki
+              Resumos
             </button>
           </div>
 
           <p className="label" style={{ padding: "6px 12px 2px" }}>
-            {t("Explorer")} {scope === "wiki" && t("· somente leitura")}
+            {t("Explorer")} {scope === "Resumos" && t("· somente leitura")}
           </p>
           <div className="scroll" style={{ flex: 1, padding: "0 8px 12px", minHeight: 0 }}>
             <Explorer
@@ -527,7 +527,7 @@ export default function App() {
               onSelect={setSelected}
               onChanged={refresh}
               scope={scope}
-              readOnly={scope === "wiki"}
+              readOnly={scope === "Resumos"}
               onOpen={abrir}
               onExcluir={async (code, lesson) => {
                 await api.session.start("delete", code, lesson);
@@ -557,7 +557,7 @@ export default function App() {
               if (!q)
                 return (
                   <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
-                    {t("Digite para procurar em raw/ e wiki/.")}
+                    {t("Digite para procurar em Notes/ e Resumos/.")}
                   </p>
                 );
               if (achados.length === 0 && noConteudo.length === 0)

@@ -5,7 +5,7 @@ import { t } from "../lib/i18n";
 /**
  * Seletor de `[[wikilink]]`.
  *
- * Lista as aulas que existem de verdade em `wiki/subjects/`. Digitar o slug de
+ * Lista as aulas que existem de verdade em `Resumos/subjects/`. Digitar o slug de
  * cabeca e como nasce link orfao: `[[interrupcoes]]` quando a pagina se chama
  * `interrupcoes-externas` nao aponta para lugar nenhum, no Obsidian e no site.
  */

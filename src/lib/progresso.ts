@@ -22,9 +22,9 @@ export type Marco = { pct: number; nome: string };
 
 /** Ordem importa: o teste roda de baixo para cima, do mais adiantado. */
 const MARCOS: { pct: number; nome: string; casa: RegExp }[] = [
-  { pct: 12, nome: t("procurando a nota"), casa: /raw[/\\]subjects/i },
-  { pct: 28, nome: t("lendo o material oficial"), casa: /raw[/\\]INATEL/i },
-  { pct: 55, nome: t("escrevendo a página"), casa: /wiki[/\\]subjects/i },
+  { pct: 12, nome: t("procurando a nota"), casa: /Notes[/\\]subjects/i },
+  { pct: 28, nome: t("lendo o material oficial"), casa: /Notes[/\\]INATEL/i },
+  { pct: 55, nome: t("escrevendo a página"), casa: /Resumos[/\\]subjects/i },
   { pct: 68, nome: t("ligando ao MOC"), casa: /MOC/ },
   { pct: 80, nome: t("copiando o material"), casa: /public[/\\](materials|attachments)/i },
   { pct: 90, nome: t("atualizando index e log"), casa: /\b(index|log)\.md\b/i },

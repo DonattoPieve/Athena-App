@@ -6,7 +6,7 @@ import { t } from "../lib/i18n";
  * Publicar = Supabase + R2, nao git.
  *
  * O painel antigo fazia `git add . && git commit && git push`. Desde
- * 2026-08-02 isso nao publica nada: `raw/` e `wiki/` estao no .gitignore do
+ * 2026-08-02 isso nao publica nada: `Notes/` e `Resumos/` estao no .gitignore do
  * vault e o conteudo viaja pelo banco. O botao dizia "publicado" e o site
  * ficava igual — o pior tipo de bug, o que parece ter funcionado.
  *

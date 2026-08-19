@@ -86,11 +86,11 @@ export function unescapeWikilinks(md: string): string {
  * IMAGEM: `![[arquivo.png]]` no disco, athena:// na tela.
  * -------------------------------------------------------
  * O CLAUDE.md §150 manda a nota crua usar o embed do Obsidian e procura o
- * arquivo em `raw/attachments/` — entao e esse o formato que grava. Dentro do
+ * arquivo em `Notes/attachments/` — entao e esse o formato que grava. Dentro do
  * editor isso vira uma URL que o Chromium sabe carregar. As duas funcoes
  * abaixo sao inversas: mudar uma exige mudar a outra.
  */
-const ATTACH_DIR = "raw/attachments";
+const ATTACH_DIR = "Notes/attachments";
 
 export function embedsParaSrc(md: string): string {
   return md.replace(/!\[\[([^\]]+?)\]\]/g, (_m, nome: string) => {

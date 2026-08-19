@@ -32,7 +32,7 @@ function tagsDoTexto(texto: string): string[] {
 }
 
 /**
- * Nota NOVA. Escolhe matéria e título, grava em raw/subjects/<MATERIA>/.
+ * Nota NOVA. Escolhe matéria e título, grava em Notes/subjects/<MATERIA>/.
  * A edição de nota que já existe é o FileEditor — aqui o assunto é criar.
  */
 export function NoteEditor({
@@ -74,7 +74,7 @@ export function NoteEditor({
     setError(null);
     try {
       const conteudo = comFrontmatter(body, tagsDoTexto(tagsTexto), tipo);
-      await api.fs.write(`raw/subjects/${folder}/${title.trim()}.md`, conteudo);
+      await api.fs.write(`Notes/subjects/${folder}/${title.trim()}.md`, conteudo);
       setSaved(true);
       onSaved();
       return true;
@@ -144,7 +144,7 @@ export function NoteEditor({
               onChange={(e) => setFolder(e.target.value)}
             >
               {subjects.length === 0 && (
-                <option value="">{t("Nenhuma matéria em raw/subjects")}</option>
+                <option value="">{t("Nenhuma matéria em Notes/subjects")}</option>
               )}
               {subjects.map((s) => (
                 <option key={s.folder} value={s.folder}>
@@ -217,7 +217,7 @@ export function NoteEditor({
             ✕ {t("Cancelar")}
           </button>
           <div className="nn-rodape-direita">
-            {saved && <span className="nn-salvo">{tf("salva em raw/subjects/{folder}", { folder })}</span>}
+            {saved && <span className="nn-salvo">{tf("salva em Notes/subjects/{folder}", { folder })}</span>}
             <button className="btn" disabled={!ready} onClick={salvarRascunho}>
               {t("Salvar rascunho")}
             </button>

@@ -46,7 +46,7 @@ export function MarkdownEditor({
   const emitido = useRef<string | null>(null);
 
   /**
-   * Imagem colada (ou arrastada) vai para `raw/attachments/`, primeiro lugar
+   * Imagem colada (ou arrastada) vai para `Notes/attachments/`, primeiro lugar
    * onde o passo 1 do CLAUDE.md procura ao ver `![[arquivo]]`. Base64 dentro
    * do .md seria mais facil e quebraria o ingest, que precisa ABRIR a imagem.
    *
@@ -60,7 +60,7 @@ export function MarkdownEditor({
     const tipo = view.state.schema.nodes.image;
     if (!tipo) throw new Error(t("Extensão de imagem ausente em athenaExtensions()."));
     const node = tipo.create({
-      src: `athena://file/raw/attachments/${encodeURIComponent(nome)}`,
+      src: `athena://file/Notes/attachments/${encodeURIComponent(nome)}`,
       alt: nome,
     });
     view.dispatch(view.state.tr.replaceSelectionWith(node).scrollIntoView());

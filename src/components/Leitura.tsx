@@ -125,7 +125,7 @@ export function Leitura({
   useEffect(() => {
     let vivo = true;
     api.fs
-      .tree("wiki")
+      .tree("Resumos")
       .then((arvore) => {
         if (!vivo) return;
         setIrmas(

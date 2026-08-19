@@ -64,7 +64,7 @@ const api = {
     },
   },
   fs: {
-    tree: (scope: "raw" | "wiki") => ipcRenderer.invoke("fs:tree", scope),
+    tree: (scope: "Notes" | "Resumos") => ipcRenderer.invoke("fs:tree", scope),
     read: (rel: string) => ipcRenderer.invoke("fs:read", rel),
     write: (rel: string, content: string) =>
       ipcRenderer.invoke("fs:write", rel, content),

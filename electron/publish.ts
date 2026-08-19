@@ -7,7 +7,7 @@ import { baixarTudo } from "./bootstrap";
 /**
  * Publicacao — o caminho do conteudo para o site.
  *
- * NAO e git. Desde 2026-08-02 `raw/` e `wiki/` estao no .gitignore do vault:
+ * NAO e git. Desde 2026-08-02 `Notes/` e `Resumos/` estao no .gitignore do vault:
  * o repositorio guarda o codigo do athena-web, e o conteudo viaja pelo
  * Supabase (texto) e pelo Cloudflare R2 (PDF, PPT, imagem). Quem faz isso e
  * `athena-web/scripts/athena-publish.mjs`, o mesmo script que o athena.bat

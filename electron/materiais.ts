@@ -7,7 +7,7 @@ import { clienteAutenticado } from "./account";
 /**
  * Material pesado sob demanda — o PDF só desce quando alguém precisa dele.
  *
- * O PROBLEMA QUE ISTO RESOLVE: `raw/INATEL` tem 340 MB, e o primeiro uso num
+ * O PROBLEMA QUE ISTO RESOLVE: `Notes/INATEL` tem 340 MB, e o primeiro uso num
  * PC novo baixava tudo antes de deixar a pessoa entrar. Numa rede lenta isso é
  * meia hora olhando uma barra — para material que, na prática, ela vai abrir
  * dois ou três arquivos.
@@ -24,7 +24,7 @@ import { clienteAutenticado } from "./account";
  *   3. o Worker do R2 — e o que vier é gravado no cache
  *
  * O INGEST é a exceção, e é de propósito: quem lê o PDF ali é o Claude Code,
- * não o app, e o `CLAUDE.md` manda ele abrir `raw/INATEL/...`. Cache não serve
+ * não o app, e o `CLAUDE.md` manda ele abrir `Notes/INATEL/...`. Cache não serve
  * — o arquivo precisa estar no caminho de verdade. Por isso `garantirNoVault`
  * baixa para dentro do vault antes de o comando rodar. Sem isso, num PC novo o
  * ingest geraria a página só com a nota do aluno: com cara de pronta e sem
@@ -187,12 +187,19 @@ export function pastaCache(): string {
   return path.join(app.getPath("userData"), "cache");
 }
 
-/** `raw/INATEL/C09-x/aula.pdf` -> { grupo: "inatel", rel: "C09-x/aula.pdf" } */
+/**
+ * `Notes/INATEL/C09-x/aula.pdf` -> { grupo: "inatel", rel: "C09-x/aula.pdf" }
+ *
+ * Os grupos (`inatel`, `raw-attachments`) sao PREFIXO DE CHAVE no R2, nao
+ * pasta do vault: os objetos ja estao gravados com esses nomes e renomea-los
+ * custaria recopiar centenas de MB sem mudar nada para o usuario. Por isso so
+ * o lado local mudou de `raw/` para `Notes/`.
+ */
 function partirRel(relVault: string): { grupo: Grupo; rel: string } | null {
   const limpo = relVault.replace(/\\/g, "/").replace(/^\/+/, "");
-  const m = /^raw\/INATEL\/(.+)$/.exec(limpo);
+  const m = /^Notes\/INATEL\/(.+)$/.exec(limpo);
   if (m) return { grupo: "inatel", rel: m[1] };
-  const a = /^raw\/attachments\/(.+)$/.exec(limpo);
+  const a = /^Notes\/attachments\/(.+)$/.exec(limpo);
   if (a) return { grupo: "raw-attachments", rel: a[1] };
   return null;
 }
@@ -256,7 +263,7 @@ export async function garantirNoVault(
   const daMateria = objetos.filter((o) => o.rel.startsWith(code));
   if (daMateria.length === 0) return 0;
 
-  const base = path.join(vaultRoot, "raw", "INATEL");
+  const base = path.join(vaultRoot, "Notes", "INATEL");
   const faltando = daMateria.filter(
     (o) => !fsSync.existsSync(path.join(base, ...o.rel.split("/"))),
   );
@@ -279,9 +286,9 @@ export async function garantirNoVault(
         await fs.writeFile(destino, await baixar(vaultRoot, o.key));
       }
       trouxe++;
-      onLinha(`  ↓ raw/INATEL/${o.rel}`);
+      onLinha(`  ↓ Notes/INATEL/${o.rel}`);
     } catch (e) {
-      onLinha(`  ! raw/INATEL/${o.rel}: ${(e as Error).message}`);
+      onLinha(`  ! Notes/INATEL/${o.rel}: ${(e as Error).message}`);
     }
   }
   return trouxe;

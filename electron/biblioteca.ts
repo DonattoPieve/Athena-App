@@ -54,8 +54,8 @@ function primeiraFrase(conteudo: string, termo: string): string {
 export async function glossario(vault: Vault): Promise<TermoGlossario[]> {
   const mapa = new Map<string, TermoGlossario>();
 
-  for (const materia of await vault.listDir("wiki/subjects")) {
-    const dirRel = path.posix.join("wiki/subjects", materia);
+  for (const materia of await vault.listDir("Resumos/subjects")) {
+    const dirRel = path.posix.join("Resumos/subjects", materia);
     for (const f of (await vault.listDir(dirRel)).filter((x) => x.endsWith(".md"))) {
       const slug = f.slice(0, -3);
       // MOC é índice e review é exercício: nenhum dos dois define termo.

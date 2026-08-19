@@ -95,8 +95,8 @@ await pagina.addInitScript(`
   const nada = () => () => {};
   const vazio = async () => [];
   const arvore = [{
-    name: "programacao", rel: "wiki/programacao", dir: true, children: [
-      { name: "introducao-a-linguagem-c.md", rel: "wiki/programacao/introducao-a-linguagem-c.md", dir: false },
+    name: "programacao", rel: "Resumos/programacao", dir: true, children: [
+      { name: "introducao-a-linguagem-c.md", rel: "Resumos/programacao/introducao-a-linguagem-c.md", dir: false },
     ],
   }];
   window.athena = {
@@ -112,14 +112,14 @@ await pagina.addInitScript(`
                            densidade: "padrao", tamanhoFonte: 14, quebraLinha: true, confirmarExcluir: true, ...p }),
     },
     usage: {
-      recentes: async () => ([{ rel: "wiki/subjects/C09-Computacao-Grafica/transformacoes.md", em: "2026-08-16T17:42:00Z" }]),
+      recentes: async () => ([{ rel: "Resumos/subjects/C09-Computacao-Grafica/transformacoes.md", em: "2026-08-16T17:42:00Z" }]),
       visitar: async () => true,
-      ultimaLeitura: async () => ({ rel: "wiki/subjects/C09-Computacao-Grafica/transformacoes.md",
+      ultimaLeitura: async () => ({ rel: "Resumos/subjects/C09-Computacao-Grafica/transformacoes.md",
         titulo: "Transformacoes Geometricas - Parte 2", materia: "Computacao Grafica",
         em: "2026-08-16T17:42:00Z", pct: 65 }),
       termos: async () => ["Ponteiro"],
       alternarTermo: async () => true,
-      revisao: async () => ([{ rel: "wiki/subjects/E09-Microcontroladores/intro.md",
+      revisao: async () => ([{ rel: "Resumos/subjects/E09-Microcontroladores/intro.md",
         titulo: "Introducao a Microcontroladores", materia: "Microcontroladores", geradaEm: "2026-08-14T10:00:00Z" }]),
     },
     win: { close: async () => true, minimize: async () => true, toggleMaximize: async () => true,
@@ -134,8 +134,8 @@ await pagina.addInitScript(`
       home: async () => ({
         subjects: [{ code: "C09", nome: "Computacao Grafica", slug: "C09-Computacao-Grafica", paginas: 7 },
                    { code: "E09", nome: "Microcontroladores", slug: "E09-Microcontroladores", paginas: 5 }],
-        paginas: [{ rel: "wiki/subjects/C09-Computacao-Grafica/transformacoes.md", titulo: "Transformacoes Geometricas", updated: "2026-08-16" },
-                  { rel: "wiki/subjects/E09-Microcontroladores/intro.md", titulo: "Introducao a Microcontroladores", updated: "2026-08-15" }],
+        paginas: [{ rel: "Resumos/subjects/C09-Computacao-Grafica/transformacoes.md", titulo: "Transformacoes Geometricas", updated: "2026-08-16" },
+                  { rel: "Resumos/subjects/E09-Microcontroladores/intro.md", titulo: "Introducao a Microcontroladores", updated: "2026-08-15" }],
         notas: 10,
         eventos: [{ data: "2026-08-16", texto: "transformacoes - fonte: aula-4.pdf", slug: "transformacoes", removido: false },
                   { data: "2026-08-15", texto: "intro - fonte: aula-1.pdf", slug: "intro", removido: false }],
@@ -143,11 +143,11 @@ await pagina.addInitScript(`
       }),
       glossario: async () => ([
         { termo: "Ponteiro", categoria: "Computacao Grafica", contexto: "Variavel que guarda um endereco de memoria.",
-          refs: [{ titulo: "Introducao a linguagem C", rel: "wiki/programacao/introducao-a-linguagem-c.md" }] },
+          refs: [{ titulo: "Introducao a linguagem C", rel: "Resumos/programacao/introducao-a-linguagem-c.md" }] },
         { termo: "Heap", categoria: "Microcontroladores", contexto: "Regiao de memoria reservada em tempo de execucao.",
-          refs: [{ titulo: "Introducao a linguagem C", rel: "wiki/programacao/introducao-a-linguagem-c.md" }] },
+          refs: [{ titulo: "Introducao a linguagem C", rel: "Resumos/programacao/introducao-a-linguagem-c.md" }] },
         { termo: "Buffer", categoria: "Computacao Grafica", contexto: "Memoria temporaria usada para guardar dados em transito.",
-          refs: [{ titulo: "Introducao a linguagem C", rel: "wiki/programacao/introducao-a-linguagem-c.md" }] },
+          refs: [{ titulo: "Introducao a linguagem C", rel: "Resumos/programacao/introducao-a-linguagem-c.md" }] },
       ]),
     },
     app: { versao: async () => "1.0.0", atualizacao: async () => ({ fase: "pronta", versao: "1.0.2" }),
@@ -164,7 +164,7 @@ await pagina.addInitScript(`
         state: null, queue: [], authNeeded: false,
         lines: [
           { n: 1, level: "log", text: "$ athena generate programacao/introducao-a-linguagem-c" },
-          { n: 2, level: "tool", text: "  lendo raw/programacao/aula-01.pdf" },
+          { n: 2, level: "tool", text: "  lendo Notes/programacao/aula-01.pdf" },
           { n: 3, level: "assistant", text: "Pagina gerada." },
           { n: 4, level: "log", text: "OK" },
         ],

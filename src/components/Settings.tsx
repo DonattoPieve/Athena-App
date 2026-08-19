@@ -494,7 +494,7 @@ export function Settings({
           <div className="atalhos">
             {[
               ["Ctrl", "P", t("abrir uma página da wiki")],
-              ["Ctrl", "K", t("buscar em raw/ e wiki/, inclusive dentro dos arquivos")],
+              ["Ctrl", "K", t("buscar em Notes/ e Resumos/, inclusive dentro dos arquivos")],
               ["Ctrl", "N", t("nova nota")],
               ["Ctrl", "W", t("fechar a aba (não dispara enquanto você digita)")],
               ["Ctrl+Shift", "P", t("ir para os Comandos")],

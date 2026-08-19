@@ -141,7 +141,7 @@ type AthenaBridge = {
     onChange(cb: () => void): () => void;
     /** Zip do vault inteiro. Devolve o caminho salvo, ou null se cancelou. */
     exportar(): Promise<string | null>;
-    /** Escolhe pasta para um vault NOVO — não exige CLAUDE.md/raw/ como pick(). Null se cancelou. */
+    /** Escolhe pasta para um vault NOVO — não exige CLAUDE.md/Notes/ como pick(). Null se cancelou. */
     escolherPastaNova(): Promise<string | null>;
     /** Cria a estrutura mínima numa pasta vazia e a torna o vault ativo. */
     criarNovo(pasta: string): Promise<{ path: string }>;
@@ -201,7 +201,7 @@ type AthenaBridge = {
     onMaximized(cb: (maximizada: boolean) => void): () => void;
   };
   fs: {
-    tree(scope: "raw" | "wiki"): Promise<TreeNode[]>;
+    tree(scope: "Notes" | "Resumos"): Promise<TreeNode[]>;
     read(rel: string): Promise<string>;
     write(rel: string, content: string): Promise<void>;
     subjects(): Promise<SubjectRef[]>;

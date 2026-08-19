@@ -15,9 +15,9 @@ import { t, tf } from "../lib/i18n";
 
 type Pagina = { nome: string; rel: string; materia: string };
 
-/** `wiki/subjects/C09-Computacao-Grafica/x.md` -> `C09 Computacao Grafica` */
+/** `Resumos/subjects/C09-Computacao-Grafica/x.md` -> `C09 Computacao Grafica` */
 function materiaDe(rel: string): string {
-  const m = /wiki\/subjects\/([^/]+)\//.exec(rel);
+  const m = /Resumos\/subjects\/([^/]+)\//.exec(rel);
   if (!m) return t("Sem matéria");
   return m[1].replace(/-/g, " ");
 }
@@ -42,7 +42,7 @@ export function MeuConteudo({ onAbrir }: { onAbrir: (rel: string) => void }) {
 
   useEffect(() => {
     api.fs
-      .tree("wiki")
+      .tree("Resumos")
       .then((arvore) => setPaginas(achatar(arvore)))
       .catch(() => setPaginas([]));
   }, []);

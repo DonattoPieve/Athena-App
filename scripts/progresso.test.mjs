@@ -14,10 +14,10 @@ const l = (texto) => ({ n: 0, level: "tool", text: texto });
 
 const INGEST = [
   { n: 0, level: "info", text: "> athena C09 transformacoes-geometricas-parte-1" },
-  l("Glob: C:\\Users\\donat\\Desktop\\Athena\\raw\\subjects\\C09-Computacao-Grafica"),
-  l("Read: C:\\Users\\donat\\Desktop\\Athena\\raw\\INATEL\\C09-Computacao-Grafica\\Aula 4.pdf"),
-  l("Write: C:\\Users\\donat\\Desktop\\Athena\\wiki\\subjects\\C09-Computacao-Grafica\\transformacoes.md"),
-  l("Edit: C:\\Users\\donat\\Desktop\\Athena\\wiki\\subjects\\C09-Computacao-Grafica\\MOC.md"),
+  l("Glob: C:\\Users\\donat\\Desktop\\Athena\\Notes\\subjects\\C09-Computacao-Grafica"),
+  l("Read: C:\\Users\\donat\\Desktop\\Athena\\Notes\\INATEL\\C09-Computacao-Grafica\\Aula 4.pdf"),
+  l("Write: C:\\Users\\donat\\Desktop\\Athena\\Resumos\\subjects\\C09-Computacao-Grafica\\transformacoes.md"),
+  l("Edit: C:\\Users\\donat\\Desktop\\Athena\\Resumos\\subjects\\C09-Computacao-Grafica\\MOC.md"),
   l("bash: copy ... athena-web\\public\\materials\\C09-Computacao-Grafica\\aula-4.pdf"),
   l("Edit: C:\\Users\\donat\\Desktop\\Athena\\log.md"),
   l("Write: C:\\Users\\donat\\Desktop\\Athena\\.ingest-status"),
@@ -41,7 +41,7 @@ ok("sobe em degraus, na ordem do CLAUDE.md", () => {
 });
 
 ok("nunca anda para tras quando o Claude relê um arquivo", () => {
-  const comReleitura = [...INGEST, l("Read: ...\\raw\\INATEL\\C09\\Aula 4.pdf")];
+  const comReleitura = [...INGEST, l("Read: ...\\Notes\\INATEL\\C09\\Aula 4.pdf")];
   assert.equal(progresso(comReleitura).pct, 97);
 });
 

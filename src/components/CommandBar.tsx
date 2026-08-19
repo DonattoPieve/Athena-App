@@ -88,8 +88,8 @@ export function CommandBar({ target, busy, onStarted, onVerHistorico }: Props) {
   /**
    * Não existe comando pra isto — nem "duplicar" nem nada parecido no
    * vocabulário do athena.bat. A única cópia que dá pra fazer com segurança
-   * é a da NOTA CRUA (`raw/subjects/...`): é a única área onde o app tem
-   * permissão de escrever (ver vault.ts — `raw/` menos `raw/INATEL/`; `wiki/`
+   * é a da NOTA CRUA (`Notes/subjects/...`): é a única área onde o app tem
+   * permissão de escrever (ver vault.ts — `Notes/` menos `Notes/INATEL/`; `Resumos/`
    * é gerada pelos comandos, nunca por uma cópia de arquivo). Por isso
    * "duplicar aula" aqui significa "duplicar a nota do aluno desta aula", e
    * o botão some quando não há nota (nada seguro para copiar).
@@ -144,7 +144,7 @@ export function CommandBar({ target, busy, onStarted, onVerHistorico }: Props) {
     <SeletorPagina
       titulo={t("Regerar qual página?")}
       aviso={t(
-        "A página é reescrita do zero a partir do material oficial. Sua nota em raw/ não é tocada.",
+        "A página é reescrita do zero a partir do material oficial. Sua nota em Notes/ não é tocada.",
       )}
       onFechar={() => setSeletor(null)}
       onEscolher={async (a) => {
@@ -338,11 +338,11 @@ export function CommandBar({ target, busy, onStarted, onVerHistorico }: Props) {
               : tf("Remover a aula {lesson}", { lesson: alvo.lesson ?? "" })}
           </p>
           <p className="cmd-confirmar-aviso">
-            {t("Suas notas em raw/ e os PDFs originais ficam intactos. Some o que foi gerado:")}
+            {t("Suas notas em Notes/ e os PDFs originais ficam intactos. Some o que foi gerado:")}
           </p>
           <pre className="term">
             {isSubjectScope
-              ? `wiki/subjects/${alvo.code}-*/\nathena-web/wiki/subjects/${alvo.code}-*/\nathena-web/public/materials/${alvo.code}-*/\n` +
+              ? `Resumos/subjects/${alvo.code}-*/\nathena-web/wiki/subjects/${alvo.code}-*/\nathena-web/public/materials/${alvo.code}-*/\n` +
                 tf("linha da matéria em {file}", { file: "index.md" })
               : deleteTargets.join("\n") +
                 (alvo.moc

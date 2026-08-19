@@ -13,11 +13,11 @@ const DND_MIME = "application/x-athena-rel";
 
 /** Espelha as guardas do vault.ts — o menu nao oferece o que o main recusaria. */
 const GRAVAVEIS = [
-  "raw/subjects",
-  "raw/concepts",
-  "raw/games",
-  "raw/studies",
-  "raw/attachments",
+  "Notes/subjects",
+  "Notes/concepts",
+  "Notes/games",
+  "Notes/studies",
+  "Notes/attachments",
 ];
 function gravavel(rel: string) {
   return GRAVAVEIS.some((p) => rel === p || rel.startsWith(p + "/"));
@@ -26,12 +26,12 @@ function gravavel(rel: string) {
 /**
  * Apagar vale numa área maior que escrever — ver `isDeletable` no vault.ts.
  *
- * A wiki é somente leitura porque quem escreve nela é o ingest. Mas tirar do
+ * `Resumos/` é somente leitura porque quem escreve lá é o ingest. Mas tirar do
  * disco uma página que não deveria estar lá é legítimo, e sem isto a única
  * saída era abrir o Explorer do Windows por fora do app.
  */
 function apagavel(rel: string) {
-  return gravavel(rel) || rel === "wiki" || rel.startsWith("wiki/");
+  return gravavel(rel) || rel === "Resumos" || rel.startsWith("Resumos/");
 }
 
 type Criando = { dir: string; tipo: "pasta" | "nota" } | null;
@@ -43,7 +43,7 @@ type Props = {
   onOpen?: (rel: string) => void;
   onChanged: () => void;
   readOnly?: boolean;
-  scope: "raw" | "wiki";
+  scope: "Notes" | "Resumos";
   /** Dispara `athena delete CODIGO AULA` — quem executa e o App. */
   onExcluir?: (code: string, lesson: string | null) => void;
 };
@@ -84,16 +84,16 @@ export function Explorer({
   }
 
   /**
-   * "Excluir do Athena" — so na wiki, e so em pagina de aula.
+   * "Excluir do Athena" — so em `Resumos/`, e so em pagina de aula.
    *
-   * Apagar o .md da wiki na mao deixa a pagina viva no site ate o proximo
+   * Apagar o .md de `Resumos/` na mao deixa a pagina viva no site ate o proximo
    * publish, e deixa o MOC apontando para o vazio. `athena delete` e o caminho
    * que o CLAUDE.md define: tira a pagina, desfaz as ligacoes e registra a
    * remocao no log. Por isso este item nao mexe em arquivo — enfileira o
    * comando.
    */
   function excluirDaWiki(node: TreeNode): MenuItem[] {
-    if (scope !== "wiki" || node.dir || !onExcluir) return [];
+    if (scope !== "Resumos" || node.dir || !onExcluir) return [];
     const alvo = parseSelection(node.rel);
     if (!alvo) return [];
 
@@ -122,7 +122,7 @@ export function Explorer({
             ),
             detalhe: node.rel,
             nota: t(
-              "A sua nota em raw/ e o material oficial não são tocados — dá para gerar de novo depois. Do site a página só some no próximo publish.",
+              "A sua nota em Notes/ e o material oficial não são tocados — dá para gerar de novo depois. Do site a página só some no próximo publish.",
             ),
             confirmar: t("Excluir"),
           });
@@ -192,7 +192,7 @@ export function Explorer({
               ? t("A pasta e tudo que está dentro dela vão para a lixeira do Windows.")
               : t("O arquivo vai para a lixeira do Windows."),
             detalhe: node.rel,
-            nota: node.rel.startsWith("wiki/")
+            nota: node.rel.startsWith("Resumos/")
               ? t(
                   "Dá para restaurar pela lixeira. Como a wiki é espelho do banco, o que você apagar aqui volta no próximo pull — para sair de vez, publique depois de apagar.",
                 )
@@ -209,7 +209,7 @@ export function Explorer({
 
   /** Menu do fundo da arvore: criar na raiz do escopo. */
   function itensDoFundo(): MenuItem[] {
-    const dir = scope === "raw" ? "raw/subjects" : "wiki";
+    const dir = scope === "Notes" ? "Notes/subjects" : "Resumos";
     const podeCriar = gravavel(dir);
     return [
       {
@@ -346,7 +346,7 @@ function Row({
   }
 
   // So o que o menu deixaria mexer pode ser arrastado; so pasta gravavel pode
-  // receber. wiki/ e raw/INATEL ficam de fora dos dois lados sem checagem
+  // receber. Resumos/ e Notes/INATEL ficam de fora dos dois lados sem checagem
   // extra — e a mesma lista que ja guarda o menu de contexto.
   const podeArrastar = !readOnly && gravavel(node.rel);
   const podeReceberDrop = !readOnly && node.dir && gravavel(node.rel);

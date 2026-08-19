@@ -4,11 +4,11 @@ import { MarkdownEditor } from "./MarkdownEditor";
 import { t } from "../lib/i18n";
 
 /**
- * Edição de nota que já existe em `raw/`.
+ * Edição de nota que já existe em `Notes/`.
  *
  * Clicar numa nota na árvore abre ela aqui, editável, e Salvar grava no mesmo
  * arquivo. As guardas do vault continuam valendo: se o caminho não for
- * gravável (raw/INATEL, wiki/), o main recusa e a mensagem aparece.
+ * gravável (Notes/INATEL, Resumos/), o main recusa e a mensagem aparece.
  */
 export function FileEditor({
   rel,

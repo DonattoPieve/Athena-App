@@ -25,7 +25,7 @@ const ATALHOS: [string, string][] = [
   ["Ctrl Shift I", "Ir para o ingest"],
 ];
 
-/** `wiki/subjects/C09-Computacao-Grafica/x.md` -> `C09 / x` */
+/** `Resumos/subjects/C09-Computacao-Grafica/x.md` -> `C09 / x` */
 function alvoLegivel(rotulo: string | null): string | null {
   if (!rotulo) return null;
   const m = /^athena\s+(?:\w+\s+)?([A-Z]\d{2})\s+(\S+)/.exec(rotulo);

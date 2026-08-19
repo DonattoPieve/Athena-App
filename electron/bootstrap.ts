@@ -32,14 +32,14 @@ import { urlWorker } from "./materiais";
 
 /** Pastas que todo vault precisa ter, mesmo vazias — ver CLAUDE.md. */
 const PASTAS_DO_VAULT = [
-  "raw/subjects",
-  "raw/concepts",
-  "raw/games",
-  "raw/studies",
-  "raw/INATEL",
-  "raw/attachments",
-  "wiki/subjects",
-  "wiki/reviews",
+  "Notes/subjects",
+  "Notes/concepts",
+  "Notes/games",
+  "Notes/studies",
+  "Notes/INATEL",
+  "Notes/attachments",
+  "Resumos/subjects",
+  "Resumos/reviews",
 ];
 
 /**
@@ -130,8 +130,8 @@ export type ResultadoBootstrap = {
 };
 
 /**
- * Puxa `subjects`, `pages` e `notes` do Supabase e os binários (`raw/INATEL`,
- * `raw/attachments`) do R2 — as MESMAS tabelas e o MESMO formato de arquivo
+ * Puxa `subjects`, `pages` e `notes` do Supabase e os binários (`Notes/INATEL`,
+ * `Notes/attachments`) do R2 — as MESMAS tabelas e o MESMO formato de arquivo
  * de `athena-web/scripts/athena-pull.mjs`, reimplementados aqui porque o
  * objetivo deste recurso é justamente não depender do `athena-web` clonado.
  *
@@ -171,13 +171,13 @@ export async function baixarTudo(
     `Banco: ${subjects.length} matéria(s), ${pages?.length ?? 0} página(s), ${notes?.length ?? 0} nota(s).`,
   );
 
-  const WIKI = path.join(destino, "wiki", "subjects");
-  // As questões de revisão moram em `wiki/reviews/<matéria>/`. O banco guarda
+  const RESUMOS = path.join(destino, "Resumos", "subjects");
+  // As questões de revisão moram em `Resumos/reviews/<matéria>/`. O banco guarda
   // matéria e slug, não pasta: sem olhar `is_review` aqui, a revisão seria
-  // recriada em `wiki/subjects/` e o publish seguinte recusaria tudo com
+  // recriada em `Resumos/subjects/` e o publish seguinte recusaria tudo com
   // "slug repetido no vault", vendo o mesmo `-review` nos dois lugares.
-  const REVIEWS = path.join(destino, "wiki", "reviews");
-  const RAW = path.join(destino, "raw", "subjects");
+  const REVIEWS = path.join(destino, "Resumos", "reviews");
+  const NOTAS = path.join(destino, "Notes", "subjects");
 
   for (const p of pages ?? []) {
     const materia = slugPorId.get(p.subject_id as string);
@@ -187,9 +187,9 @@ export async function baixarTudo(
       ? serializarComFrontmatter(p.content as string, fm)
       : (p.content as string);
 
-    const pasta = p.is_review ? "wiki/reviews" : "wiki/subjects";
+    const pasta = p.is_review ? "Resumos/reviews" : "Resumos/subjects";
     await gravar(
-      path.join(p.is_review ? REVIEWS : WIKI, materia, `${p.slug}.md`),
+      path.join(p.is_review ? REVIEWS : RESUMOS, materia, `${p.slug}.md`),
       conteudo,
       `${pasta}/${materia}/${p.slug}.md`,
       (atual) => mesmoConteudo(atual, p.content as string, fm),
@@ -202,9 +202,9 @@ export async function baixarTudo(
     const materia = slugPorId.get(n.subject_id as string);
     if (!materia) continue;
     await gravar(
-      path.join(RAW, materia, n.filename as string),
+      path.join(NOTAS, materia, n.filename as string),
       n.content as string,
-      `raw/subjects/${materia}/${n.filename}`,
+      `Notes/subjects/${materia}/${n.filename}`,
       (atual) => atual === n.content,
       stats,
       onLinha,
@@ -212,7 +212,7 @@ export async function baixarTudo(
   }
 
   // ---------- material pesado: sob demanda, não agora ----------
-  // `raw/INATEL` tem centenas de MB e o primeiro uso não precisa deles: quem
+  // `Notes/INATEL` tem centenas de MB e o primeiro uso não precisa deles: quem
   // baixa é o próprio ato de abrir o arquivo (ver materiais.ts). Trazer tudo
   // aqui era meia hora de espera antes de a pessoa ver a primeira página.
   if (!urlWorker(destino)) {

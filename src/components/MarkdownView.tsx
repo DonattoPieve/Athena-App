@@ -9,7 +9,7 @@ import { tf } from "../lib/i18n";
  * o que você lê aqui é o que o site renderiza, com a mesma folha de estilo.
  *
  * Os `[[wikilinks]]` viram links de verdade (`athena-wiki:slug`) e são
- * resolvidos no clique: o alvo é procurado em `wiki/subjects/` e abre numa
+ * resolvidos no clique: o alvo é procurado em `Resumos/subjects/` e abre numa
  * aba. Link órfão avisa em vez de abrir nada.
  */
 export function MarkdownView({

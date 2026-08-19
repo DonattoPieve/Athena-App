@@ -54,7 +54,7 @@ export function SeletorPagina({
 
   useEffect(() => {
     api.fs
-      .tree("wiki")
+      .tree("Resumos")
       .then((arvore) => setPaginas(achatar(arvore)))
       .catch(() => setPaginas([]));
   }, []);

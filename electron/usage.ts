@@ -141,7 +141,7 @@ export async function ultimaLeitura(
   const titulo = /^#\s+(.+)$/m.exec(conteudo)?.[1]?.trim() || slug;
 
   const relPosix = maisRecente.rel.split(path.sep).join("/");
-  const pastaMateria = /^wiki\/subjects\/([^/]+)\//.exec(relPosix)?.[1];
+  const pastaMateria = /^Resumos\/subjects\/([^/]+)\//.exec(relPosix)?.[1];
   const materia = pastaMateria ? nomeMateria(pastaMateria) : "";
 
   return { rel: maisRecente.rel, titulo, materia, em: maisRecente.em, pct: maisRecente.pct };
@@ -180,8 +180,8 @@ export async function revisao(
 ): Promise<{ rel: string; titulo: string; materia: string; geradaEm: string }[]> {
   const out: { rel: string; titulo: string; materia: string; geradaEm: string }[] = [];
 
-  for (const pastaMateria of await vault.listDir("wiki/subjects")) {
-    const dirRel = path.posix.join("wiki/subjects", pastaMateria);
+  for (const pastaMateria of await vault.listDir("Resumos/subjects")) {
+    const dirRel = path.posix.join("Resumos/subjects", pastaMateria);
     const arquivos = (await vault.listDir(dirRel)).filter((f) => f.endsWith(".md"));
     const existentes = new Set(arquivos);
 

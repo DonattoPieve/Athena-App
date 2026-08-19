@@ -1,7 +1,7 @@
 # Athena App
 
 Cliente desktop do vault Athena. Substitui o Obsidian e o `athena.bat` por uma
-janela: explorer de `raw/` e `wiki/`, editor de nota crua, e botões para ingest,
+janela: explorer de `Notes/` e `Resumos/`, editor de nota crua, e botões para ingest,
 regeração, questões, remoção e publicação.
 
 O app **não guarda conteúdo**. Ele aponta para a pasta do vault Athena que já
@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Na primeira execução, escolha a pasta do vault (a que tem `CLAUDE.md` e `raw/`).
+Na primeira execução, escolha a pasta do vault (a que tem `CLAUDE.md` e `Notes/`).
 O caminho fica salvo em `%APPDATA%/athena-app/athena-app.json`.
 
 Pré-requisito: Claude Code instalado e logado na conta Pro
@@ -42,7 +42,7 @@ aparece depois que o Vite responde na porta. Para encerrar, `Ctrl+C` no terminal
 Faça com uma aula **que já existe**: reprocessar sobrescreve e o git desfaz.
 Aula nova no primeiro teste mistura dois riscos.
 
-1. **Vault reconhecido** — a árvore mostra `raw/` com `INATEL/` e `subjects/`.
+1. **Vault reconhecido** — a árvore mostra `Notes/` com `INATEL/` e `subjects/`.
    Se der "não parece o vault", a pasta escolhida foi a errada.
 2. **Alvo correto** — clicar na aula preenche o painel Alvo com `CODIGO / slug`
    e lista a nota do aluno e o material oficial encontrados.
@@ -56,8 +56,8 @@ Aula nova no primeiro teste mistura dois riscos.
 5. **Status vira OK sozinho** — no fim, o painel Publicar sai de "não concluiu"
    para "último comando terminou bem" **sem você clicar em nada**. Se não virar,
    o ingest não chegou ao fim: não publique.
-6. **Antes de publicar, leia a lista** — precisa ter `wiki/...` **e**
-   `athena-web/wiki/...`. Só `wiki/` significa espelho não feito: não publique,
+6. **Antes de publicar, leia a lista** — precisa ter `Resumos/...` **e**
+   `athena-web/wiki/...`. Só `Resumos/` significa espelho não feito: não publique,
    reprocesse.
 7. **Vercel** — o push dispara o redeploy sozinho; confira a página no site.
 
@@ -86,9 +86,9 @@ As invariantes do `CLAUDE.md` são código, não promessa:
 
 | Caminho | App |
 |---|---|
-| `raw/subjects`, `raw/concepts`, `raw/games`, `raw/studies` | leitura e escrita |
-| `raw/INATEL/` | somente leitura |
-| `wiki/`, `athena-web/wiki/` | somente leitura |
+| `Notes/subjects`, `Notes/concepts`, `Notes/games`, `Notes/studies` | leitura e escrita |
+| `Notes/INATEL/` | somente leitura |
+| `Resumos/`, `athena-web/wiki/` | somente leitura |
 | fora da raiz do vault | bloqueado |
 
 Editar uma página gerada é impossível pelo app. Correção de conteúdo é
@@ -119,7 +119,7 @@ vivo escrevendo arquivos. O cancelamento usa `taskkill /T /F`.
 
 ### Publicação — Supabase e R2, não git
 
-Desde 2026-08-02 `raw/` e `wiki/` estão no `.gitignore` do vault: o repositório
+Desde 2026-08-02 `Notes/` e `Resumos/` estão no `.gitignore` do vault: o repositório
 guarda o **código** do athena-web, e o **conteúdo** viaja pelo Supabase (texto) e
 pelo Cloudflare R2 (PDF, PPT, imagem). Quem faz isso é
 `athena-web/scripts/athena-publish.mjs`, o mesmo script do passo [2/2] do `.bat`.
@@ -144,7 +144,7 @@ continuam num lugar só, valendo pelo terminal e por aqui.
 > foi removido.
 
 O `.ingest-status` tem **watcher próprio**: ele fica na raiz e começa com ponto,
-e o watcher da árvore ignora dotfiles e só olha `raw/` e `wiki/`. Além disso, o
+e o watcher da árvore ignora dotfiles e só olha `Notes/` e `Resumos/`. Além disso, o
 fim de cada comando força uma releitura — no OneDrive o evento de arquivo pode
 chegar tarde ou não chegar.
 
@@ -169,7 +169,7 @@ escreve como usuário normal e apanha do RLS igual a todo mundo.
 
 Três lugares: **Comandos**, **Nova nota** e **Arquivo**. A árvore é quem manda —
 clicar num arquivo abre ele em *Arquivo*, e a própria tela decide o modo: nota
-em `raw/` abre **editável** (salva no mesmo arquivo), página da wiki abre em
+em `Notes/` abre **editável** (salva no mesmo arquivo), página da wiki abre em
 leitura, PDF e PPT abrem no visualizador.
 
 > Antes existiam abas "Leitura" e "Material" separadas e a árvore trocava de aba
@@ -185,13 +185,13 @@ itens dependem do estado do vault e do tema: nova nota, nova pasta, renomear
 Explorer do Windows, abrir material no programa padrão e apagar.
 
 **Apagar vai para a lixeira do Windows**, não `unlink`: com o conteúdo fora do
-git, `raw/` é a única cópia local do seu texto. A confirmação é o modal do app
+git, `Notes/` é a única cópia local do seu texto. A confirmação é o modal do app
 (`Confirm.tsx`), não o `confirm()` do navegador — a janela nativa vinha com o
 título "athena-app", fonte do sistema e nenhum espaço para dizer o que
 acontece. Aqui cabe o caminho completo e a nota de que dá para restaurar. O foco
 nasce em **Cancelar** e `Esc` fecha: ação destrutiva não pode depender de
 `Enter` por reflexo. E o menu espelha as guardas do
-`vault.ts` — sobre `raw/INATEL/` ou `wiki/`, criar/renomear/apagar aparecem
+`vault.ts` — sobre `Notes/INATEL/` ou `Resumos/`, criar/renomear/apagar aparecem
 desabilitados em vez de falharem depois.
 
 ### Visualizador de material
@@ -238,17 +238,17 @@ régua, tabela com cabeçalho em surface), traduzidas dos triplets
 mesmo pipeline com `editable: false`, então nota escrita e nota publicada têm a
 mesma cara. Mexeu num, mexa no outro.
 
-**Imagem colada** (Ctrl+V ou arrastar) vai para `raw/attachments/` com o nome da
+**Imagem colada** (Ctrl+V ou arrastar) vai para `Notes/attachments/` com o nome da
 aula (`interrupcoes-externas-2.png`) e entra na nota como `![[arquivo.png]]` —
 o formato do CLAUDE.md §150 e o primeiro lugar onde o ingest procura. Base64
 dentro do `.md` seria mais fácil e quebraria o fluxo: o ingest precisa **abrir**
 a imagem para descrever o que ela ensina.
 
-Na tela essa imagem vira `athena://file/raw/attachments/...`; no disco volta a
+Na tela essa imagem vira `athena://file/Notes/attachments/...`; no disco volta a
 ser `![[...]]`. As duas conversões são inversas (`embedsParaSrc` /
 `srcParaEmbeds`) — mexeu numa, mexa na outra, e o `test:md` cobre o ciclo.
 
-**`[[link]]`** abre a lista de aulas que existem de verdade em `wiki/subjects/`.
+**`[[link]]`** abre a lista de aulas que existem de verdade em `Resumos/subjects/`.
 Digitar o slug de cabeça é como nasce link órfão: `[[interrupcoes]]` quando a
 página é `interrupcoes-externas` não aponta para lugar nenhum.
 

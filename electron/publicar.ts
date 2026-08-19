@@ -6,7 +6,7 @@ import { clienteAutenticado } from "./account";
 import { esquecer, listar, subir, type Grupo, type ObjetoRemoto } from "./materiais";
 
 /**
- * O `athena publish`, sem terminal — espelha `wiki/`, `raw/subjects/` e o
+ * O `athena publish`, sem terminal — espelha `Resumos/`, `Notes/subjects/` e o
  * `log.md` para o Supabase, e os binários para o R2 pelo Worker.
  *
  * É o CAMINHO DE IDA do que o `bootstrap.ts` traz de volta, e existe pelo mesmo
@@ -50,7 +50,7 @@ function separarFrontmatter(raw: string): { data: Frontmatter; content: string }
 
 /**
  * Mesma slugificação do CLAUDE.md: minúsculo, sem acento, sem pontuação,
- * espaço vira hífen. É o que liga a nota crua (`raw/subjects/...`) à aula.
+ * espaço vira hífen. É o que liga a nota crua (`Notes/subjects/...`) à aula.
  */
 function slugify(nome: string): string {
   return nome
@@ -263,23 +263,25 @@ export async function publicar(
 }
 
 async function espelhar(vaultRoot: string, onLinha: (s: string) => void): Promise<void> {
-  const WIKI = path.join(vaultRoot, "wiki", "subjects");
-  // As revisões saíram de dentro da pasta da matéria para `wiki/reviews/<MATERIA>/`.
+  const RESUMOS = path.join(vaultRoot, "Resumos", "subjects");
+  // As revisões saíram de dentro da pasta da matéria para `Resumos/reviews/<MATERIA>/`.
   // Para o BANCO nada mudou: a revisão continua sendo página da mesma matéria,
   // com o mesmo slug e `is_review` verdadeiro. Só o lugar no disco é outro.
-  const REVIEWS = path.join(vaultRoot, "wiki", "reviews");
-  const RAW = path.join(vaultRoot, "raw", "subjects");
+  const REVIEWS = path.join(vaultRoot, "Resumos", "reviews");
+  const NOTAS = path.join(vaultRoot, "Notes", "subjects");
 
-  if (!fsSync.existsSync(WIKI)) {
-    throw new Error(`Não achei wiki/subjects em ${WIKI}. Este vault não tem conteúdo para publicar.`);
+  if (!fsSync.existsSync(RESUMOS)) {
+    throw new Error(
+      `Não achei Resumos/subjects em ${RESUMOS}. Este vault não tem conteúdo para publicar.`,
+    );
   }
 
   /* ---------- 1. lê o disco ---------- */
   const local: MateriaLocal[] = [];
   const slugVisto = new Map<string, string>(); // slug -> matéria onde apareceu
 
-  for (const dirSlug of await pastas(WIKI)) {
-    const dir = path.join(WIKI, dirSlug);
+  for (const dirSlug of await pastas(RESUMOS)) {
+    const dir = path.join(RESUMOS, dirSlug);
     const dirReviews = path.join(REVIEWS, dirSlug);
 
     // Aula e revisão viram uma lista só, cada item carregando o próprio
@@ -333,13 +335,13 @@ async function espelhar(vaultRoot: string, onLinha: (s: string) => void): Promis
 
   /* ---------- 1b. lê as notas cruas ---------- */
   // A nota só pode ser publicada se a matéria existir (`notes.subject_id` é
-  // obrigatório). Matéria em `raw/` sem nenhuma página em `wiki/` ainda não
+  // obrigatório). Matéria em `Notes/` sem nenhuma página em `Resumos/` ainda não
   // existe no banco — avisa e segue, em vez de derrubar a publicação.
   const notasPorMateria = new Map<string, NotaLocal[]>();
   const notasSemMateria: string[] = [];
 
-  for (const dirSlug of await pastas(RAW)) {
-    const files = await markdowns(path.join(RAW, dirSlug));
+  for (const dirSlug of await pastas(NOTAS)) {
+    const files = await markdowns(path.join(NOTAS, dirSlug));
     if (files.length === 0) continue;
 
     if (!local.some((s) => s.slug === dirSlug)) {
@@ -352,7 +354,7 @@ async function espelhar(vaultRoot: string, onLinha: (s: string) => void): Promis
       notas.push({
         slug: slugify(file),
         filename: file,
-        content: await fs.readFile(path.join(RAW, dirSlug, file), "utf8"),
+        content: await fs.readFile(path.join(NOTAS, dirSlug, file), "utf8"),
       });
     }
     notasPorMateria.set(dirSlug, notas);
@@ -566,9 +568,15 @@ const SERVIDOS = [
   path.join("athena-web", "public", "attachments"),
 ];
 
+/**
+ * Pasta local -> grupo no bucket. Os dois nomes de grupo (`inatel`,
+ * `raw-attachments`) sao prefixo de chave no R2 e NAO acompanharam o rename da
+ * pasta: as chaves ja estao gravadas assim, e trocar o prefixo obrigaria a
+ * recopiar centenas de MB sem mudar nada para quem usa o app.
+ */
 const FONTES: { grupo: Grupo; rel: string[] }[] = [
-  { grupo: "inatel", rel: ["raw", "INATEL"] },
-  { grupo: "raw-attachments", rel: ["raw", "attachments"] },
+  { grupo: "inatel", rel: ["Notes", "INATEL"] },
+  { grupo: "raw-attachments", rel: ["Notes", "attachments"] },
 ];
 
 async function subirBinarios(
@@ -648,7 +656,7 @@ async function subirBinarios(
 
   const total = envios.novo + envios.atualizado + envios.igual;
   if (total === 0) {
-    onLinha("Nenhum binário em raw/INATEL ou raw/attachments.");
+    onLinha("Nenhum binário em Notes/INATEL ou Notes/attachments.");
     return;
   }
   onLinha(

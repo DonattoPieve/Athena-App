@@ -14,7 +14,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import chokidar, { FSWatcher } from "chokidar";
-import { Vault, slugify } from "./vault";
+import { Vault, migrarNomesAntigos, slugify } from "./vault";
 import { ClaudeRunner, Cmd, SessionEvent } from "./claude";
 import * as account from "./account";
 import * as publish from "./publish";
@@ -80,6 +80,10 @@ async function pushStatus() {
 }
 
 function attachVault(root: string) {
+  // ANTES de qualquer leitura do disco: um vault gravado por uma versao
+  // anterior tem as pastas chamadas `raw/` e `wiki/`, e daqui para frente todo
+  // mundo procura `Notes/` e `Resumos/`. Ver migrarNomesAntigos.
+  const migradas = migrarNomesAntigos(root);
   vault = new Vault(root);
 
   const cfg = readConfig();
@@ -96,10 +100,14 @@ function attachVault(root: string) {
     }
   });
 
+  // Depois do runner nascer: a linha vai para o painel da sessao, que e onde
+  // a pessoa procura explicacao quando algo mudou sozinho. Uma por pasta.
+  for (const troca of migradas) runner?.log(`Vault atualizado: pasta renomeada, ${troca}`);
+
   watcher?.close();
   // OneDrive dispara eventos fantasma; o debounce do awaitWriteFinish
   // evita repintar a arvore no meio de uma escrita.
-  watcher = chokidar.watch([path.join(root, "raw"), path.join(root, "wiki")], {
+  watcher = chokidar.watch([path.join(root, "Notes"), path.join(root, "Resumos")], {
     ignoreInitial: true,
     ignored: /(^|[\/\\])\.|node_modules/,
     awaitWriteFinish: { stabilityThreshold: 400, pollInterval: 100 },
@@ -111,7 +119,7 @@ function attachVault(root: string) {
   });
 
   // O .ingest-status vive na RAIZ e comeca com ponto: o watcher da arvore
-  // ignora dotfiles e nem olha para fora de raw/ e wiki/. Sem este segundo
+  // ignora dotfiles e nem olha para fora de Notes/ e Resumos/. Sem este segundo
   // watcher o OK final do ingest nunca chega na tela, e o painel Publicar
   // fica congelado no FAIL escrito no comeco do comando.
   statusWatcher?.close();
@@ -403,7 +411,7 @@ function registerIpc() {
     const chosen = res.filePaths[0];
     if (!Vault.isVault(chosen)) {
       throw new Error(
-        "Essa pasta nao parece o vault do Athena — nao encontrei CLAUDE.md e raw/.",
+        "Essa pasta nao parece o vault do Athena — nao encontrei CLAUDE.md e Notes/.",
       );
     }
     guardarVaultDaConta(chosen);
@@ -416,7 +424,7 @@ function registerIpc() {
    * `athena login`, `athena pull`) viram pela interface. Ver bootstrap.ts.
    */
 
-  /** Escolhe uma pasta para NASCER o vault — sem exigir CLAUDE.md/raw/, ao contrário de vault:pick. */
+  /** Escolhe uma pasta para NASCER o vault — sem exigir CLAUDE.md/Notes/, ao contrário de vault:pick. */
   ipcMain.handle("vault:escolherPastaNova", async () => {
     const res = await dialog.showOpenDialog({
       title: "Escolha (ou crie) uma pasta vazia para o vault novo",
@@ -532,7 +540,7 @@ function registerIpc() {
   );
   ipcMain.handle("fs:trash", async (_e, rel: string) => {
     // Lixeira do Windows, nao unlink: apagar a nota errada com dois cliques
-    // precisa ter volta, e o raw/ e a unica copia local do seu texto.
+    // precisa ter volta, e o Notes/ e a unica copia local do seu texto.
     await shell.trashItem(requireVault().trashTarget(rel));
     return true;
   });
@@ -546,7 +554,7 @@ function registerIpc() {
     "fs:pasteImage",
     async (_e, base: string, ext: string, data: Uint8Array) => {
       const v = requireVault();
-      const dir = "raw/attachments";
+      const dir = "Notes/attachments";
       const nome = await v.freeName(dir, base, ext);
       await v.writeBinary(`${dir}/${nome}`, data);
       return nome;
@@ -584,7 +592,7 @@ function registerIpc() {
           if (copia) runner?.log(`Copia guardada em ${copia}`);
         }
       }
-      // O Claude Code lê o PDF pelo caminho de verdade (`raw/INATEL/...`), não
+      // O Claude Code lê o PDF pelo caminho de verdade (`Notes/INATEL/...`), não
       // pelo cache. Num PC novo esse arquivo pode não ter descido ainda — e um
       // ingest sem o material do professor gera página com cara de pronta e sem
       // lastro no que foi cobrado em aula. Por isso a garantia vem antes.
