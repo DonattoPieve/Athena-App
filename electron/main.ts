@@ -352,6 +352,10 @@ function soltarVault() {
  */
 function abrirVaultDaConta(conta: { id: string; email: string } | null) {
   uidAtual = conta?.id ?? null;
+  // O cache de material e a listagem do bucket sao por conta: sem isto, duas
+  // contas nesta maquina compartilhariam a pasta de cache, e a segunda leria o
+  // PDF que a primeira baixou. Ver materiais.ts.
+  materiais.definirConta(uidAtual);
   if (!conta) {
     soltarVault();
     return;
@@ -513,7 +517,18 @@ function registerIpc() {
     return getPrefs(salvas);
   });
 
-  ipcMain.handle("fs:tree", (_e, scope: string) => requireVault().tree(scope));
+  /**
+   * A arvore e o disco MAIS o que a conta tem no bucket.
+   *
+   * So o disco nao serve num PC novo: `Notes/INATEL` nasce vazio, e o material
+   * do professor so desce quando alguem abre o arquivo — que e justamente o
+   * que ninguem consegue fazer numa pasta que a tela mostra vazia. Ver
+   * `mesclarRemotos` em materiais.ts.
+   */
+  ipcMain.handle("fs:tree", async (_e, scope: string) => {
+    const v = requireVault();
+    return materiais.mesclarRemotos(v.root, scope, await v.tree(scope));
+  });
   ipcMain.handle("fs:read", (_e, rel: string) => requireVault().read(rel));
   ipcMain.handle("fs:write", (_e, rel: string, content: string) =>
     requireVault().write(rel, content),
@@ -523,8 +538,16 @@ function registerIpc() {
     requireVault().describe(code, lesson),
   );
   ipcMain.handle("fs:slug", (_e, input: string) => slugify(input));
-  ipcMain.handle("fs:reveal", (_e, rel: string) => {
-    shell.showItemInFolder(requireVault().resolve(rel));
+  ipcMain.handle("fs:reveal", async (_e, rel: string) => {
+    const v = requireVault();
+    const abs = v.resolve(rel);
+    if (fs.existsSync(abs)) return shell.showItemInFolder(abs);
+    // Material que ainda nao desceu: revelar o caminho do vault abriria a
+    // pasta e nao mostraria nada. Traz o arquivo e revela a copia do cache —
+    // que e onde ele de fato esta nesta maquina.
+    const doCache = await materiais.garantirParaLeitura(v.root, rel);
+    if (!doCache) throw new Error(`"${rel}" ainda não está nesta máquina.`);
+    shell.showItemInFolder(doCache);
   });
 
   // ---- operacoes do explorer ----
@@ -546,7 +569,13 @@ function registerIpc() {
   });
   ipcMain.handle("fs:openExternal", async (_e, rel: string) => {
     // PPT, DOCX e afins: abre no programa padrao do Windows.
-    const erro = await shell.openPath(requireVault().resolve(rel));
+    const v = requireVault();
+    const abs = v.resolve(rel);
+    // O PPT do professor pode estar so no bucket: abrir o caminho do vault
+    // devolveria "arquivo nao encontrado" para um item que a arvore mostra.
+    const alvo = fs.existsSync(abs) ? abs : await materiais.garantirParaLeitura(v.root, rel);
+    if (!alvo) throw new Error(`"${rel}" ainda não está nesta máquina.`);
+    const erro = await shell.openPath(alvo);
     if (erro) throw new Error(erro);
     return true;
   });
@@ -816,6 +845,10 @@ function registerProtocol() {
           return null;
         });
       if (!doCache) return new Response("not found", { status: 404 });
+      // O arquivo acabou de descer: a arvore ainda o mostra como "so na
+      // nuvem". Avisar aqui troca o icone assim que o PDF abre, sem a pessoa
+      // precisar clicar em outra pasta e voltar.
+      send("vault:changed", null);
       return net.fetch(pathToFileURL(doCache).toString());
     } catch (e) {
       return new Response(String((e as Error).message), { status: 403 });

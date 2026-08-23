@@ -3,6 +3,10 @@ export type TreeNode = {
   rel: string;
   dir: boolean;
   children?: TreeNode[];
+  /** Está no bucket desta conta, ainda não nesta máquina. Ver electron/materiais.ts. */
+  remoto?: boolean;
+  /** Só em nó remoto: já foi aberto uma vez, então abre sem internet. */
+  emCache?: boolean;
 };
 
 export type SubjectRef = { code: string; name: string; folder: string };

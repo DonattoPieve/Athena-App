@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, mensagemDeErro, parseSelection, type TreeNode } from "../lib/api";
 import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 import { useConfirm } from "./Confirm";
-import { Chevron, FileIcon, FolderIcon } from "./icons";
+import { Chevron, FileIcon, FolderIcon, NuvemIcon } from "./icons";
 import { t, tf } from "../lib/i18n";
 
 const EDITAVEIS = /\.(md|txt)$/i;
@@ -32,6 +32,17 @@ function gravavel(rel: string) {
  */
 function apagavel(rel: string) {
   return gravavel(rel) || rel === "Resumos" || rel.startsWith("Resumos/");
+}
+
+/**
+ * Nó que só existe no bucket ainda não tem arquivo nesta máquina.
+ *
+ * Renomear, mover ou apagar um deles falharia no main com "não encontrado" —
+ * pior, pareceria bug do app. Aqui o item já nasce desabilitado; o que traz o
+ * arquivo é abrir (ver electron/materiais.ts).
+ */
+function local(node: TreeNode) {
+  return !node.remoto;
 }
 
 type Criando = { dir: string; tipo: "pasta" | "nota" } | null;
@@ -135,7 +146,7 @@ export function Explorer({
   function itensDe(node: TreeNode): MenuItem[] {
     const dir = dirDe(node);
     const podeCriar = gravavel(dir);
-    const podeMexer = gravavel(node.rel);
+    const podeMexer = gravavel(node.rel) && local(node);
 
     const abrirMaterial: MenuItem[] = MATERIAL.test(node.name)
       ? [
@@ -182,7 +193,7 @@ export function Explorer({
         label: node.dir ? t("Apagar pasta") : t("Apagar"),
         hint: t("lixeira"),
         danger: true,
-        disabled: !apagavel(node.rel),
+        disabled: !apagavel(node.rel) || !local(node),
         onClick: async () => {
           const ok = await confirmar({
             titulo: node.dir
@@ -348,8 +359,25 @@ function Row({
   // So o que o menu deixaria mexer pode ser arrastado; so pasta gravavel pode
   // receber. Resumos/ e Notes/INATEL ficam de fora dos dois lados sem checagem
   // extra — e a mesma lista que ja guarda o menu de contexto.
-  const podeArrastar = !readOnly && gravavel(node.rel);
-  const podeReceberDrop = !readOnly && node.dir && gravavel(node.rel);
+  const podeArrastar = !readOnly && gravavel(node.rel) && local(node);
+  const podeReceberDrop = !readOnly && node.dir && gravavel(node.rel) && local(node);
+
+  /**
+   * O que a linha diz de si mesma quando o arquivo ainda está na nuvem.
+   *
+   * Sem uma frase aqui, um arquivo apagado e um arquivo que nunca desceu ficam
+   * com a mesma cara — e a diferença é grande: um sumiu, o outro chega no
+   * clique.
+   */
+  const titulo = node.remoto
+    ? node.emCache
+      ? tf("{rel} — já baixado, abre sem internet", { rel: node.rel })
+      : tf("{rel} — está na sua conta, ainda não nesta máquina. Clique para trazer.", {
+          rel: node.rel,
+        })
+    : readOnly
+      ? tf("{rel} — somente leitura", { rel: node.rel })
+      : node.rel;
 
   return (
     <li>
@@ -358,6 +386,7 @@ function Row({
         data-active={selected === node.rel}
         data-dir={node.dir}
         data-drop-over={podeReceberDrop && dragOverRel === node.rel}
+        data-remoto={node.remoto ? true : undefined}
         style={{ paddingLeft: 8 + depth * 14, gap: 6 }}
         draggable={podeArrastar}
         onClick={() => {
@@ -370,7 +399,7 @@ function Row({
           onMenu(e, node);
         }}
         onKeyDown={(e) => {
-          if (e.key === "F2" && gravavel(node.rel)) {
+          if (e.key === "F2" && gravavel(node.rel) && local(node)) {
             e.preventDefault();
             setRenaming(node.rel);
           }
@@ -401,7 +430,7 @@ function Row({
           const origem = e.dataTransfer.getData(DND_MIME);
           if (origem && origem !== node.rel) void guard(() => api.fs.mover(origem, node.rel));
         }}
-        title={readOnly ? tf("{rel} — somente leitura", { rel: node.rel }) : node.rel}
+        title={titulo}
       >
         {node.dir ? (
           <>
@@ -411,7 +440,11 @@ function Row({
         ) : (
           <>
             <span style={{ width: 10, flex: "0 0 auto" }} />
-            <FileIcon material={!EDITAVEIS.test(node.name)} />
+            {node.remoto ? (
+              <NuvemIcon baixado={node.emCache} />
+            ) : (
+              <FileIcon material={!EDITAVEIS.test(node.name)} />
+            )}
           </>
         )}
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

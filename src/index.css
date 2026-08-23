@@ -2114,6 +2114,17 @@ kbd {
   outline-offset: -1px;
 }
 
+/* Material que está na conta mas ainda não nesta máquina (ver materiais.ts).
+   Apagado o bastante para se distinguir do que já está no disco, e não tanto
+   que pareça desabilitado: clicar é exatamente o que traz o arquivo. */
+.exp-row[data-remoto="true"] {
+  color: var(--c-muted);
+}
+.exp-row[data-remoto="true"]:hover,
+.exp-row[data-remoto="true"][data-active="true"] {
+  color: var(--c-text);
+}
+
 /* Cada aba aberta tem o seu painel; a inativa some por `display:none` inline.
    O painel ativo herda a coluna inteira para os filhos que esticam (editor,
    leitura) continuarem esticando. */

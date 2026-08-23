@@ -40,6 +40,17 @@ export type TreeNode = {
   rel: string;
   dir: boolean;
   children?: TreeNode[];
+  /**
+   * Existe no bucket desta conta, ainda nao nesta maquina.
+   *
+   * Quem poe estes nos na arvore e o `mesclarRemotos` (materiais.ts), depois
+   * de o disco ser lido — a arvore do `tree()` aqui e so o disco. Abrir o no
+   * e o que traz o arquivo; ate la ele nao pode ser renomeado, movido nem
+   * apagado, porque nao ha arquivo local para isso.
+   */
+  remoto?: boolean;
+  /** So em no remoto: ja foi aberto uma vez, entao abre sem internet. */
+  emCache?: boolean;
 };
 
 /** Retrato do vault para a home. Tudo lido do disco, nada do banco. */

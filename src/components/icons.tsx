@@ -216,3 +216,34 @@ export function FileIcon({ material }: { material?: boolean }) {
     </svg>
   );
 }
+
+/**
+ * Material que esta na conta mas ainda nao nesta maquina.
+ *
+ * Nuvem VAZIA = so no bucket, o clique e que traz. Nuvem CHEIA (com a seta
+ * apagada) = ja foi aberto uma vez, entao o arquivo esta no cache e abre sem
+ * internet. A diferenca importa: uma linha promete rede, a outra nao.
+ */
+export function NuvemIcon({ baixado }: { baixado?: boolean }) {
+  return (
+    <svg className="tree-icon" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path
+        d="M4.6 12.2a3 3 0 0 1-.3-6 3.9 3.9 0 0 1 7.4.9 2.6 2.6 0 0 1-.5 5.1z"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinejoin="round"
+        fill="currentColor"
+        fillOpacity={baixado ? 0.32 : 0}
+      />
+      {!baixado && (
+        <path
+          d="M8 7.4v4m0 0L6.4 9.9M8 11.4l1.6-1.5"
+          stroke="currentColor"
+          strokeWidth="1.1"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  );
+}

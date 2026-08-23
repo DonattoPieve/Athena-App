@@ -3,6 +3,14 @@ import * as fsSync from "node:fs";
 import * as path from "node:path";
 import { app } from "electron";
 import { clienteAutenticado } from "./account";
+import type { TreeNode } from "./vault";
+import {
+  DENTRO_DO_VAULT,
+  mesclarArvore,
+  tocaOBucket,
+  type Grupo,
+  type ItemEspelho,
+} from "./espelho";
 
 /**
  * Material pesado sob demanda — o PDF só desce quando alguém precisa dele.
@@ -22,6 +30,13 @@ import { clienteAutenticado } from "./account";
  *   1. o vault (quem já tinha tudo baixado continua lendo de lá)
  *   2. o cache
  *   3. o Worker do R2 — e o que vier é gravado no cache
+ *
+ * O ESPELHO é o que torna tudo isso visível. Baixar sob demanda só funciona se
+ * o arquivo APARECER antes de descer: num PC novo `Notes/INATEL` está vazio, e
+ * uma árvore que lê só o disco não mostra nada — não há o que clicar, então o
+ * download sob demanda nunca dispara e o material parece ter sumido. Por isso
+ * `mesclarRemotos` junta a listagem do bucket desta conta na árvore: o arquivo
+ * está lá, marcado como ainda-não-baixado, e abrir é o que o traz.
  *
  * O INGEST é a exceção, e é de propósito: quem lê o PDF ali é o Claude Code,
  * não o app, e o `CLAUDE.md` manda ele abrir `Notes/INATEL/...`. Cache não serve
@@ -84,7 +99,24 @@ async function erroDoWorker(resp: Response, oque: string): Promise<Error> {
   return new Error(`${oque} falhou (HTTP ${resp.status}${detalhe ? `: ${detalhe}` : ""}).`);
 }
 
-export type Grupo = "inatel" | "raw-attachments";
+/** Quem usa `materiais` nao precisa saber que a tabela mora no espelho. */
+export type { Grupo, ItemEspelho };
+
+/**
+ * Id da conta logada — quem avisa é o main, no `abrirVaultDaConta`.
+ *
+ * O cache é POR CONTA de propósito. Duas contas na mesma máquina podem ter uma
+ * aula no mesmo caminho (`C09-.../aula.pdf`), e com uma pasta só a segunda
+ * leria o PDF que a primeira baixou — a separação que o Worker faz no bucket
+ * cairia no disco. Sem conta (antes do login) nada é lido nem gravado.
+ */
+let uidAtual: string | null = null;
+
+export function definirConta(uid: string | null) {
+  if (uid === uidAtual) return;
+  uidAtual = uid;
+  esquecer();
+}
 
 /**
  * O token de acesso vale ~1 h; guardar por 30 min evita um `refreshSession`
@@ -122,6 +154,7 @@ export async function listar(vaultRoot: string, grupo: Grupo): Promise<ObjetoRem
   if (!resp.ok) throw await erroDoWorker(resp, "a listagem");
   const { objetos } = (await resp.json()) as { objetos: ObjetoRemoto[] };
   listagens.set(grupo, objetos ?? []);
+  guardarListagem(grupo, objetos ?? []);
   return objetos ?? [];
 }
 
@@ -129,6 +162,100 @@ export async function listar(vaultRoot: string, grupo: Grupo): Promise<ObjetoRem
 export function esquecer() {
   listagens.clear();
   token = null;
+}
+
+/* ------------------------------------------------------------------ *
+ * O espelho — o que a conta tem no bucket, visto de dentro do vault
+ * ------------------------------------------------------------------ */
+
+/**
+ * A última listagem que deu certo, gravada no cache da conta.
+ *
+ * É o que faz o espelho sobreviver ao avião. Sem ela, abrir o app sem internet
+ * mostraria `Notes/INATEL` vazio — inclusive os PDFs que já estão no cache
+ * desta máquina e abririam na hora. O arquivo é pequeno (nome, tamanho e hash)
+ * e vale por conta, na mesma pasta do cache.
+ */
+function arquivoDaListagem(grupo: Grupo): string {
+  return path.join(pastaCache(), `listagem-${grupo}.json`);
+}
+
+function guardarListagem(grupo: Grupo, objetos: ObjetoRemoto[]) {
+  try {
+    fsSync.mkdirSync(pastaCache(), { recursive: true });
+    fsSync.writeFileSync(arquivoDaListagem(grupo), JSON.stringify(objetos), "utf8");
+  } catch {
+    // Disco cheio ou pasta sem permissão: o espelho desta sessão continua
+    // funcionando pela rede; só o modo offline fica sem ele.
+  }
+}
+
+function listagemGuardada(grupo: Grupo): ObjetoRemoto[] | null {
+  try {
+    const salvo = JSON.parse(fsSync.readFileSync(arquivoDaListagem(grupo), "utf8"));
+    return Array.isArray(salvo) ? (salvo as ObjetoRemoto[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tudo que existe no bucket DESTA conta, em caminho de vault.
+ *
+ * Sem rede cai na última listagem gravada, que é o certo aqui: a alternativa é
+ * a árvore encolher no dia sem internet, escondendo até o que está no cache.
+ *
+ * A queda NÃO vale para o publish — `listar` continua estourando quando a rede
+ * falha, de propósito. Publicar com listagem velha faria o publish achar que o
+ * arquivo já está no bucket e pular o envio, e o material nunca subiria.
+ */
+export async function espelho(vaultRoot: string): Promise<ItemEspelho[]> {
+  const itens: ItemEspelho[] = [];
+  for (const grupo of Object.keys(DENTRO_DO_VAULT) as Grupo[]) {
+    let objetos: ObjetoRemoto[] | null = null;
+    try {
+      objetos = await listar(vaultRoot, grupo);
+    } catch {
+      objetos = listagemGuardada(grupo);
+    }
+    if (!objetos) continue;
+    for (const o of objetos) {
+      const partes = o.rel.split("/");
+      itens.push({
+        rel: `${DENTRO_DO_VAULT[grupo]}/${o.rel}`,
+        size: o.size,
+        emCache: fsSync.existsSync(path.join(pastaCache(), grupo, ...partes)),
+      });
+    }
+  }
+  return itens;
+}
+
+/**
+ * A arvore do disco MAIS o que a conta tem no bucket.
+ *
+ * E a peca que faltava para um PC novo: num vault recem-criado `Notes/INATEL`
+ * nasce vazio, e o material so desce quando alguem abre o arquivo — o que
+ * ninguem consegue fazer numa pasta que a tela mostra vazia.
+ *
+ * Falhar aqui devolve a arvore do disco intacta. Rede fora com cache vazio e
+ * situacao normal, e ela nao pode virar erro numa arvore que, no fundo, e so a
+ * lateral do app. A regra da mesclagem em si mora em `espelho.ts`, testada.
+ */
+export async function mesclarRemotos(
+  vaultRoot: string,
+  escopo: string,
+  arvore: TreeNode[],
+): Promise<TreeNode[]> {
+  const base = escopo.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  // `Resumos/` e texto e desce inteiro no pull — ir a rede ali seria gasto
+  // sem resposta.
+  if (!tocaOBucket(base)) return arvore;
+  try {
+    return mesclarArvore(base, await espelho(vaultRoot), arvore);
+  } catch {
+    return arvore;
+  }
 }
 
 async function baixar(vaultRoot: string, key: string): Promise<Buffer> {
@@ -184,23 +311,15 @@ export async function subir(
  * e sumiria justamente no dia sem internet, que é quando o cache mais vale.
  */
 export function pastaCache(): string {
-  return path.join(app.getPath("userData"), "cache");
+  return path.join(app.getPath("userData"), "cache", uidAtual ?? "sem-conta");
 }
 
-/**
- * `Notes/INATEL/C09-x/aula.pdf` -> { grupo: "inatel", rel: "C09-x/aula.pdf" }
- *
- * Os grupos (`inatel`, `raw-attachments`) sao PREFIXO DE CHAVE no R2, nao
- * pasta do vault: os objetos ja estao gravados com esses nomes e renomea-los
- * custaria recopiar centenas de MB sem mudar nada para o usuario. Por isso so
- * o lado local mudou de `raw/` para `Notes/`.
- */
+/** `Notes/INATEL/C09-x/aula.pdf` -> { grupo: "inatel", rel: "C09-x/aula.pdf" } */
 function partirRel(relVault: string): { grupo: Grupo; rel: string } | null {
   const limpo = relVault.replace(/\\/g, "/").replace(/^\/+/, "");
-  const m = /^Notes\/INATEL\/(.+)$/.exec(limpo);
-  if (m) return { grupo: "inatel", rel: m[1] };
-  const a = /^Notes\/attachments\/(.+)$/.exec(limpo);
-  if (a) return { grupo: "raw-attachments", rel: a[1] };
+  for (const [grupo, base] of Object.entries(DENTRO_DO_VAULT) as [Grupo, string][]) {
+    if (limpo.startsWith(base + "/")) return { grupo, rel: limpo.slice(base.length + 1) };
+  }
   return null;
 }
 
