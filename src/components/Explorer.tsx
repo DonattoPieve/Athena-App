@@ -31,7 +31,11 @@ function gravavel(rel: string) {
  * saída era abrir o Explorer do Windows por fora do app.
  */
 function apagavel(rel: string) {
-  return gravavel(rel) || rel === "Resumos" || rel.startsWith("Resumos/");
+  // Espelha `isDeletable` do vault.ts, que abriu para `Notes/` inteiro. Ficou
+  // preso em `gravavel` (que exclui Notes/INATEL) quando a regra do main
+  // mudou, e o resultado foi o pior tipo de defeito: o item do menu aparecia,
+  // cinza, sem dizer por que — o app podia apagar e a tela dizia que nao.
+  return recebeDeFora(rel) || rel === "Resumos" || rel.startsWith("Resumos/");
 }
 
 /**
@@ -80,6 +84,8 @@ type Criando = { dir: string; tipo: "pasta" | "nota" } | null;
 
 type Props = {
   nodes: TreeNode[];
+  /** Primeira carga ainda em voo — inclui a ida à nuvem. */
+  carregando?: boolean;
   selected: string | null;
   onSelect: (rel: string) => void;
   onOpen?: (rel: string) => void;
@@ -92,6 +98,7 @@ type Props = {
 
 export function Explorer({
   nodes,
+  carregando,
   selected,
   onSelect,
   onOpen,
@@ -142,6 +149,76 @@ export function Explorer({
         partes.push(tf("já existia, não sobrescrevi: {nomes}", { nomes: jaExistiam.join(", ") }));
       }
       setRecado(partes.join(" · ") || t("Nada a copiar."));
+    } catch (e) {
+      setErro(mensagemDeErro(e));
+    }
+  }
+
+  /**
+   * Apagar, com a confirmação. Sai daqui, e não de dentro do menu, porque a
+   * tecla Del faz exatamente a mesma coisa — e duas cópias do mesmo diálogo
+   * divergiriam na primeira vez que um texto mudasse.
+   */
+  async function apagarNode(node: TreeNode) {
+    if (!apagavel(node.rel)) return;
+    // Só o que mora na nuvem ganha a caixa: oferecer "apagar da nuvem"
+    // numa pasta de ideias soltas seria uma pergunta sem resposta certa.
+    const naNuvem = temCopiaNaNuvem(node.rel);
+    // Nada no disco: a única coisa que "apagar" pode significar aqui é
+    // tirar da nuvem. Oferecer a caixa seria oferecer um botão que, se
+    // desmarcado, não faz nada.
+    const soNaNuvem = !!node.remoto;
+
+    const ok = await confirmar({
+      titulo: node.dir
+        ? tf("Apagar a pasta {nome}?", { nome: node.name })
+        : tf("Apagar {nome}?", { nome: node.name }),
+      mensagem: soNaNuvem
+        ? t(
+            "Este arquivo não está nesta máquina — ele está só na sua conta na nuvem. Apagar tira dela.",
+          )
+        : node.dir
+          ? t("A pasta e tudo que está dentro dela vão para a lixeira do Windows.")
+          : t("O arquivo vai para a lixeira do Windows."),
+      detalhe: node.rel,
+      caixa:
+        naNuvem && !soNaNuvem
+          ? {
+              rotulo: t(
+                "Apagar também da nuvem (Cloudflare e banco de dados). Sem isto, sai só desta máquina e volta a aparecer aqui como material da nuvem.",
+              ),
+              inicial: true,
+            }
+          : undefined,
+      nota: node.rel.startsWith("Resumos/")
+        ? t(
+            "Dá para restaurar pela lixeira. Como a wiki é espelho do banco, o que você apagar aqui volta no próximo pull — para sair de vez, publique depois de apagar.",
+          )
+        : naNuvem
+          ? t(
+              "Apagar da nuvem é definitivo: o Cloudflare não guarda versão anterior, e nenhum outro PC recupera o arquivo depois.",
+            )
+          : t(
+              "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no próximo publish, que espelha o disco.",
+            ),
+      confirmar: t("Apagar"),
+    });
+    if (!ok) return;
+
+    const tambemNaNuvem = naNuvem && (soNaNuvem || caixaMarcada.current);
+    setErro(null);
+    setRecado(null);
+    try {
+      const r = await api.fs.trash(node.rel, tambemNaNuvem);
+      onChanged();
+      if (r && (r.r2 || r.banco)) {
+        setRecado(
+          tf("Fora da nuvem: {r2} arquivo(s) no Cloudflare, {banco} nota(s) no banco.", {
+            r2: r.r2,
+            banco: r.banco,
+          }),
+        );
+      }
     } catch (e) {
       setErro(mensagemDeErro(e));
     }
@@ -251,61 +328,13 @@ export function Explorer({
       ...excluirDaWiki(node),
       {
         label: node.dir ? t("Apagar pasta") : t("Apagar"),
-        hint: t("lixeira"),
+        hint: "Del",
         danger: true,
-        disabled: !apagavel(node.rel) || !local(node),
-        onClick: async () => {
-          // Só o que mora na nuvem ganha a caixa: oferecer "apagar da nuvem"
-          // numa pasta de ideias soltas seria uma pergunta sem resposta certa.
-          const naNuvem = temCopiaNaNuvem(node.rel);
-          const ok = await confirmar({
-            titulo: node.dir
-              ? tf("Apagar a pasta {nome}?", { nome: node.name })
-              : tf("Apagar {nome}?", { nome: node.name }),
-            mensagem: node.dir
-              ? t("A pasta e tudo que está dentro dela vão para a lixeira do Windows.")
-              : t("O arquivo vai para a lixeira do Windows."),
-            detalhe: node.rel,
-            caixa: naNuvem
-              ? {
-                  rotulo: t(
-                    "Apagar também da nuvem (Cloudflare e banco de dados). Sem isto, sai só desta máquina e volta a aparecer aqui como material da nuvem.",
-                  ),
-                  inicial: true,
-                }
-              : undefined,
-            nota: node.rel.startsWith("Resumos/")
-              ? t(
-                  "Dá para restaurar pela lixeira. Como a wiki é espelho do banco, o que você apagar aqui volta no próximo pull — para sair de vez, publique depois de apagar.",
-                )
-              : naNuvem
-                ? t(
-                    "Apagar da nuvem é definitivo: o Cloudflare não guarda versão anterior, e nenhum outro PC recupera o arquivo depois.",
-                  )
-                : t(
-                    "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no próximo publish, que espelha o disco.",
-                  ),
-            confirmar: t("Apagar"),
-          });
-          if (!ok) return;
-          const tambemNaNuvem = naNuvem && caixaMarcada.current;
-          setErro(null);
-          setRecado(null);
-          try {
-            const r = await api.fs.trash(node.rel, tambemNaNuvem);
-            onChanged();
-            if (r && (r.r2 || r.banco)) {
-              setRecado(
-                tf("Fora da nuvem: {r2} arquivo(s) no Cloudflare, {banco} nota(s) no banco.", {
-                  r2: r.r2,
-                  banco: r.banco,
-                }),
-              );
-            }
-          } catch (e) {
-            setErro(mensagemDeErro(e));
-          }
-        },
+        // Nó que só existe na nuvem TAMBÉM pode: agora existe para onde mandar
+        // o pedido. Renomear e mover continuam fora, porque esses precisam de
+        // arquivo local.
+        disabled: !apagavel(node.rel),
+        onClick: () => void apagarNode(node),
       },
     ];
   }
@@ -330,7 +359,9 @@ export function Explorer({
     <div style={{ minHeight: "100%" }} onContextMenu={(e) => menu.open(e, itensDoFundo())}>
       {nodes.length === 0 && !criando ? (
         <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
-          {t("Nada aqui ainda. Botão direito para criar.")}
+          {carregando
+            ? t("Procurando o material desta conta…")
+            : t("Nada aqui ainda. Botão direito para criar.")}
         </p>
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
@@ -350,6 +381,7 @@ export function Explorer({
               setCriando={setCriando}
               guard={guard}
               importar={importar}
+              apagarNode={apagarNode}
               dragOverRel={dragOverRel}
               setDragOverRel={setDragOverRel}
             />
@@ -411,6 +443,7 @@ function Row({
   setCriando,
   guard,
   importar,
+  apagarNode,
   dragOverRel,
   setDragOverRel,
 }: {
@@ -427,6 +460,7 @@ function Row({
   setCriando: (c: Criando) => void;
   guard: (fn: () => Promise<unknown>) => Promise<void>;
   importar: (destino: string, arquivos: FileList) => Promise<void>;
+  apagarNode: (node: TreeNode) => Promise<void>;
   dragOverRel: string | null;
   setDragOverRel: (r: string | null) => void;
 }) {
@@ -509,6 +543,13 @@ function Row({
             e.preventDefault();
             setRenaming(node.rel);
           }
+          // Del faz o mesmo que o item do menu — inclusive o diálogo. Existe
+          // porque "botão direito e o último item" é a única porta hoje, e
+          // menu de contexto é a parte da interface que ninguém encontra.
+          if (e.key === "Delete" && apagavel(node.rel)) {
+            e.preventDefault();
+            void apagarNode(node);
+          }
         }}
         onDragStart={(e) => {
           if (!podeArrastar) return;
@@ -588,6 +629,7 @@ function Row({
               setCriando={setCriando}
               guard={guard}
               importar={importar}
+              apagarNode={apagarNode}
             />
           ))}
           {criandoAqui && criando && (

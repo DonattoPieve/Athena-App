@@ -310,6 +310,18 @@ export function CommandBar({ target, busy, onStarted, onVerHistorico }: Props) {
           <button
             className="btn btn-danger cmd-perigo"
             disabled={busy || (!hasPage && !isSubjectScope)}
+            /**
+             * Cinza aqui confunde com "apagar arquivo", que é outra coisa e
+             * fica na árvore. Este botão roda `athena delete`, que remove a
+             * PÁGINA GERADA — sem página gerada ele não tem o que fazer.
+             */
+            title={
+              !hasPage && !isSubjectScope
+                ? t(
+                    "Esta aula ainda não tem página gerada — não há o que remover do Athena. Para apagar o arquivo em si, use o botão direito nele na árvore (ou a tecla Del).",
+                  )
+                : undefined
+            }
             onClick={() => {
               setTyped("");
               setConfirmDelete(true);

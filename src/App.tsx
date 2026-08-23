@@ -118,6 +118,7 @@ export default function App() {
   const uidConta = conta ? conta.id : null;
   const [scope, setScope] = useState<Scope>("Notes");
   const [tree, setTree] = useState<TreeNode[]>([]);
+  const [carregandoArvore, setCarregandoArvore] = useState(true);
   const [subjects, setSubjects] = useState<SubjectRef[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
@@ -286,8 +287,21 @@ export default function App() {
 
   useEffect(() => {
     if (!vaultPath) return;
-    api.fs.tree(scope).then(setTree).catch(() => setTree([]));
+    // A árvore não é só disco: ela espera a listagem da nuvem desta conta (ver
+    // electron/espelho.ts), o que custa uma ida à rede. Sem marcar essa espera,
+    // um vault novo mostra "Nada aqui ainda" por um segundo — e essa frase é
+    // uma afirmação, não um "carregando". Foi exatamente o que assustou.
+    let vivo = true;
+    setCarregandoArvore(true);
+    api.fs
+      .tree(scope)
+      .then((t) => vivo && setTree(t))
+      .catch(() => vivo && setTree([]))
+      .finally(() => vivo && setCarregandoArvore(false));
     api.fs.subjects().then(setSubjects).catch(() => setSubjects([]));
+    return () => {
+      vivo = false;
+    };
   }, [vaultPath, scope, refreshKey]);
 
   useEffect(() => {
@@ -523,6 +537,7 @@ export default function App() {
           <div className="scroll" style={{ flex: 1, padding: "0 8px 12px", minHeight: 0 }}>
             <Explorer
               nodes={tree}
+              carregando={carregandoArvore}
               selected={selected}
               onSelect={setSelected}
               onChanged={refresh}
