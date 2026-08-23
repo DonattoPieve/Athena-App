@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 import { app } from "electron";
 import { clienteAutenticado } from "./account";
 import type { TreeNode } from "./vault";
@@ -329,6 +330,67 @@ export async function subir(
   if (!resp.ok) throw await erroDoWorker(resp, `o envio de "${key}"`);
 }
 
+/**
+ * Chaves do bucket que correspondem a um caminho do vault.
+ *
+ * Arquivo casa exato; PASTA casa por prefixo, e e assim que apagar uma materia
+ * inteira funciona. Devolve vazio para caminho que nao mora no bucket
+ * (`Notes/subjects`, por exemplo) — la quem manda e o Supabase.
+ */
+export async function chavesDe(vaultRoot: string, relVault: string): Promise<string[]> {
+  const alvo = partirRel(relVault);
+  if (!alvo) {
+    // Pode ser a raiz de um grupo inteiro (`Notes/INATEL`): ai nao ha `rel`,
+    // e o que casa e tudo daquele grupo.
+    const limpo = relVault.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+    for (const [grupo, base] of Object.entries(DENTRO_DO_VAULT) as [Grupo, string][]) {
+      if (limpo === base) return (await listar(vaultRoot, grupo)).map((o) => o.key);
+    }
+    return [];
+  }
+  const objetos = await listar(vaultRoot, alvo.grupo);
+  return objetos
+    .filter((o) => o.rel === alvo.rel || o.rel.startsWith(alvo.rel + "/"))
+    .map((o) => o.key);
+}
+
+/**
+ * Apaga um objeto do bucket, pelo Worker.
+ *
+ * Quem chama e so o "Apagar" do explorer, depois da confirmacao — o publish
+ * continua proibido de remover binario. Uma chave por pedido, de proposito:
+ * ver o comentario da rota em `worker/src/index.js`.
+ */
+export async function apagar(vaultRoot: string, key: string): Promise<void> {
+  const worker = urlWorker(vaultRoot);
+  if (!worker) throw new Error("O portão do R2 não foi publicado neste app.");
+
+  const resp = await fetch(`${worker}/f?k=${encodeURIComponent(key)}`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${await tokenDaConta(vaultRoot)}` },
+  });
+  // 404 e sucesso para quem queria o arquivo fora do bucket: ja nao esta la.
+  if (resp.status === 405) {
+    // O portao publicado ainda e o de antes da rota DELETE. Sem esta linha o
+    // erro seria "HTTP 405", que nao diz a ninguem o que fazer.
+    throw new Error(
+      "O portão do R2 publicado ainda não sabe apagar. Rode `npm run worker:deploy` " +
+        "na pasta do app e tente de novo. Nada foi apagado.",
+    );
+  }
+  if (!resp.ok && resp.status !== 404) throw await erroDoWorker(resp, `a remoção de "${key}"`);
+
+  // Tira da listagem em memoria E da salva: sem isto a arvore continuaria
+  // mostrando o arquivo como "na nuvem" ate o app ser reaberto.
+  for (const [grupo, objetos] of listagens) {
+    const sobrou = objetos.filter((o) => o.key !== key);
+    if (sobrou.length !== objetos.length) {
+      listagens.set(grupo, sobrou);
+      guardarListagem(grupo, sobrou);
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ *
  * Cache
  * ------------------------------------------------------------------ */
@@ -381,11 +443,29 @@ export async function garantirParaLeitura(
 
   const bytes = await baixar(vaultRoot, obj.key);
   await fs.mkdir(path.dirname(noVault), { recursive: true });
-  // Grava em arquivo temporario e renomeia: se o app fechar no meio do
-  // download, nao fica meio PDF no vault, que depois passaria por bom.
-  const parcial = `${noVault}.parcial`;
-  await fs.writeFile(parcial, bytes);
-  await fs.rename(parcial, noVault);
+
+  // Grava fora da vista e so entao renomeia para o lugar final.
+  //
+  // O temporario NAO pode ser `<arquivo>.pdf.parcial` ao lado do destino: o
+  // watcher do vault avisa a tela na hora, e o arquivo pela metade aparecia na
+  // arvore com nome de arquivo de verdade. Em `.athena/` ele fica invisivel
+  // (a arvore pula tudo que comeca com ponto) e o rename continua atomico,
+  // porque e o mesmo disco — se o app fechar no meio, sobra lixo escondido,
+  // nunca meio PDF passando por bom.
+  const guardado = path.join(
+    vaultRoot,
+    ".athena",
+    "parciais",
+    `${createHash("sha1").update(obj.key).digest("hex").slice(0, 16)}.parcial`,
+  );
+  await fs.mkdir(path.dirname(guardado), { recursive: true });
+  try {
+    await fs.writeFile(guardado, bytes);
+    await fs.rename(guardado, noVault);
+  } catch (e) {
+    await fs.rm(guardado, { force: true }).catch(() => {});
+    throw e;
+  }
   return noVault;
 }
 

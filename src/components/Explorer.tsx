@@ -45,6 +45,37 @@ function local(node: TreeNode) {
   return !node.remoto;
 }
 
+/**
+ * Onde dá para SOLTAR arquivo vindo do Windows — espelha `isImportavel` do
+ * vault.ts.
+ *
+ * É mais largo que `gravavel` de propósito: `Notes/INATEL` não aceita edição
+ * (é a fonte que o ingest lê), mas aceita matéria nova. O que protege o
+ * material é a importação nunca sobrescrever nome que já existe.
+ */
+function recebeDeFora(rel: string) {
+  return rel === "Notes" || rel.startsWith("Notes/");
+}
+
+/**
+ * Esse caminho tem cópia na nuvem?
+ *
+ * `Notes/INATEL` e `Notes/attachments` são objetos no R2; `Notes/subjects` são
+ * linhas na tabela `notes`. O resto de `Notes/` (Ideias, rascunho) só existe
+ * nesta máquina — e para esses a pergunta "apagar da nuvem também?" não faria
+ * sentido nenhum.
+ */
+function temCopiaNaNuvem(rel: string) {
+  return ["Notes/INATEL", "Notes/attachments", "Notes/subjects"].some(
+    (p) => rel === p || rel.startsWith(p + "/"),
+  );
+}
+
+/** O arrasto traz arquivo do sistema, e não um nó da própria árvore? */
+function temArquivoDeFora(e: React.DragEvent) {
+  return Array.from(e.dataTransfer.types).includes("Files");
+}
+
 type Criando = { dir: string; tipo: "pasta" | "nota" } | null;
 
 type Props = {
@@ -70,10 +101,14 @@ export function Explorer({
   onExcluir,
 }: Props) {
   const menu = useContextMenu();
-  const { confirmar, dialogo } = useConfirm();
+  const { confirmar, dialogo, caixaMarcada } = useConfirm();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [criando, setCriando] = useState<Criando>(null);
   const [erro, setErro] = useState<string | null>(null);
+  // "Copiei 12 arquivos" não é erro e não pode sair em vermelho — mas some
+  // sozinho também não pode: importar é a única ação aqui sem efeito visível
+  // imediato quando a pasta está fechada.
+  const [recado, setRecado] = useState<string | null>(null);
   // Pasta sob o cursor durante um arrastar — so o realce visual, a validacao
   // de verdade (origem gravavel, destino gravavel, sem sobrescrever) e do
   // main via vault.mover().
@@ -84,6 +119,29 @@ export function Explorer({
     try {
       await fn();
       onChanged();
+    } catch (e) {
+      setErro(mensagemDeErro(e));
+    }
+  }
+
+  /** Recebe o que o Windows soltou em cima de uma pasta da árvore. */
+  async function importar(destino: string, arquivos: FileList) {
+    const origens = Array.from(arquivos)
+      .map((f) => api.fs.caminhoDoArquivo(f))
+      .filter(Boolean);
+    if (origens.length === 0) return;
+
+    setErro(null);
+    setRecado(null);
+    try {
+      const { copiados, jaExistiam } = await api.fs.importar(destino, origens);
+      onChanged();
+      const partes: string[] = [];
+      if (copiados) partes.push(tf("{n} arquivo(s) copiado(s) para {destino}", { n: copiados, destino }));
+      if (jaExistiam.length) {
+        partes.push(tf("já existia, não sobrescrevi: {nomes}", { nomes: jaExistiam.join(", ") }));
+      }
+      setRecado(partes.join(" · ") || t("Nada a copiar."));
     } catch (e) {
       setErro(mensagemDeErro(e));
     }
@@ -145,7 +203,9 @@ export function Explorer({
 
   function itensDe(node: TreeNode): MenuItem[] {
     const dir = dirDe(node);
-    const podeCriar = gravavel(dir);
+    // Criar segue a regra de ACRESCENTAR (Notes/ inteiro), não a de editar:
+    // é assim que uma matéria nova nasce em Notes/INATEL sem sair do app.
+    const podeCriar = recebeDeFora(dir);
     const podeMexer = gravavel(node.rel) && local(node);
 
     const abrirMaterial: MenuItem[] = MATERIAL.test(node.name)
@@ -195,6 +255,9 @@ export function Explorer({
         danger: true,
         disabled: !apagavel(node.rel) || !local(node),
         onClick: async () => {
+          // Só o que mora na nuvem ganha a caixa: oferecer "apagar da nuvem"
+          // numa pasta de ideias soltas seria uma pergunta sem resposta certa.
+          const naNuvem = temCopiaNaNuvem(node.rel);
           const ok = await confirmar({
             titulo: node.dir
               ? tf("Apagar a pasta {nome}?", { nome: node.name })
@@ -203,16 +266,45 @@ export function Explorer({
               ? t("A pasta e tudo que está dentro dela vão para a lixeira do Windows.")
               : t("O arquivo vai para a lixeira do Windows."),
             detalhe: node.rel,
+            caixa: naNuvem
+              ? {
+                  rotulo: t(
+                    "Apagar também da nuvem (Cloudflare e banco de dados). Sem isto, sai só desta máquina e volta a aparecer aqui como material da nuvem.",
+                  ),
+                  inicial: true,
+                }
+              : undefined,
             nota: node.rel.startsWith("Resumos/")
               ? t(
                   "Dá para restaurar pela lixeira. Como a wiki é espelho do banco, o que você apagar aqui volta no próximo pull — para sair de vez, publique depois de apagar.",
                 )
-              : t(
-                  "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no próximo publish, que espelha o disco.",
-                ),
+              : naNuvem
+                ? t(
+                    "Apagar da nuvem é definitivo: o Cloudflare não guarda versão anterior, e nenhum outro PC recupera o arquivo depois.",
+                  )
+                : t(
+                    "Dá para restaurar pela lixeira. O que já foi publicado só sai do site no próximo publish, que espelha o disco.",
+                  ),
             confirmar: t("Apagar"),
           });
-          if (ok) void guard(() => api.fs.trash(node.rel));
+          if (!ok) return;
+          const tambemNaNuvem = naNuvem && caixaMarcada.current;
+          setErro(null);
+          setRecado(null);
+          try {
+            const r = await api.fs.trash(node.rel, tambemNaNuvem);
+            onChanged();
+            if (r && (r.r2 || r.banco)) {
+              setRecado(
+                tf("Fora da nuvem: {r2} arquivo(s) no Cloudflare, {banco} nota(s) no banco.", {
+                  r2: r.r2,
+                  banco: r.banco,
+                }),
+              );
+            }
+          } catch (e) {
+            setErro(mensagemDeErro(e));
+          }
         },
       },
     ];
@@ -221,7 +313,7 @@ export function Explorer({
   /** Menu do fundo da arvore: criar na raiz do escopo. */
   function itensDoFundo(): MenuItem[] {
     const dir = scope === "Notes" ? "Notes/subjects" : "Resumos";
-    const podeCriar = gravavel(dir);
+    const podeCriar = recebeDeFora(dir);
     return [
       {
         label: t("Nova pasta de matéria"),
@@ -257,6 +349,7 @@ export function Explorer({
               criando={criando}
               setCriando={setCriando}
               guard={guard}
+              importar={importar}
               dragOverRel={dragOverRel}
               setDragOverRel={setDragOverRel}
             />
@@ -282,6 +375,11 @@ export function Explorer({
 
       {erro && (
         <p style={{ color: "#e24b4a", fontSize: 11, padding: "6px 10px", margin: 0 }}>{erro}</p>
+      )}
+      {recado && (
+        <p style={{ color: "var(--c-muted)", fontSize: 11, padding: "6px 10px", margin: 0 }}>
+          {recado}
+        </p>
       )}
 
       <ContextMenu state={menu.state} onClose={menu.close} />
@@ -312,6 +410,7 @@ function Row({
   criando,
   setCriando,
   guard,
+  importar,
   dragOverRel,
   setDragOverRel,
 }: {
@@ -327,6 +426,7 @@ function Row({
   criando: Criando;
   setCriando: (c: Criando) => void;
   guard: (fn: () => Promise<unknown>) => Promise<void>;
+  importar: (destino: string, arquivos: FileList) => Promise<void>;
   dragOverRel: string | null;
   setDragOverRel: (r: string | null) => void;
 }) {
@@ -361,6 +461,12 @@ function Row({
   // extra — e a mesma lista que ja guarda o menu de contexto.
   const podeArrastar = !readOnly && gravavel(node.rel) && local(node);
   const podeReceberDrop = !readOnly && node.dir && gravavel(node.rel) && local(node);
+  // Vindo do Windows a regra é outra e mais larga: `Notes/INATEL` não aceita
+  // edição, mas aceita matéria nova. Ver `recebeDeFora` acima.
+  // Sem `local()` aqui, ao contrário do mover: uma pasta que só existe no
+  // espelho do R2 (nada dela baixado) ainda é o lugar certo para soltar
+  // material novo — o main a cria no disco na hora.
+  const podeReceberDeFora = !readOnly && node.dir && recebeDeFora(node.rel);
 
   /**
    * O que a linha diz de si mesma quando o arquivo ainda está na nuvem.
@@ -385,7 +491,7 @@ function Row({
         className="nav-item exp-row"
         data-active={selected === node.rel}
         data-dir={node.dir}
-        data-drop-over={podeReceberDrop && dragOverRel === node.rel}
+        data-drop-over={(podeReceberDrop || podeReceberDeFora) && dragOverRel === node.rel}
         data-remoto={node.remoto ? true : undefined}
         style={{ paddingLeft: 8 + depth * 14, gap: 6 }}
         draggable={podeArrastar}
@@ -410,23 +516,33 @@ function Row({
           e.dataTransfer.effectAllowed = "move";
         }}
         onDragOver={(e) => {
-          if (!podeReceberDrop) return;
+          const deFora = temArquivoDeFora(e);
+          if (deFora ? !podeReceberDeFora : !podeReceberDrop) return;
           // preventDefault e o que sinaliza ao navegador que este alvo aceita
           // o drop — sem isso o onDrop nunca dispara.
           e.preventDefault();
-          e.dataTransfer.dropEffect = "move";
+          // "copy" de fora, "move" de dentro: o cursor do Windows passa a
+          // dizer a verdade sobre o que vai acontecer com o original.
+          e.dataTransfer.dropEffect = deFora ? "copy" : "move";
           if (dragOverRel !== node.rel) setDragOverRel(node.rel);
         }}
         onDragLeave={(e) => {
-          if (!podeReceberDrop) return;
+          if (!podeReceberDrop && !podeReceberDeFora) return;
           // relatedTarget dentro do proprio botao e so o cursor passando por
           // cima do icone/texto — nao pode apagar o realce nesse caso.
           if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverRel(null);
         }}
         onDrop={(e) => {
-          if (!podeReceberDrop) return;
+          const deFora = temArquivoDeFora(e);
+          if (deFora ? !podeReceberDeFora : !podeReceberDrop) return;
           e.preventDefault();
           setDragOverRel(null);
+          if (deFora) {
+            // Pasta inteira também vem por aqui: o Windows entrega a pasta
+            // como um item só, e o main copia a árvore dela.
+            void importar(node.rel, e.dataTransfer.files);
+            return;
+          }
           const origem = e.dataTransfer.getData(DND_MIME);
           if (origem && origem !== node.rel) void guard(() => api.fs.mover(origem, node.rel));
         }}
@@ -471,6 +587,7 @@ function Row({
               criando={criando}
               setCriando={setCriando}
               guard={guard}
+              importar={importar}
             />
           ))}
           {criandoAqui && criando && (

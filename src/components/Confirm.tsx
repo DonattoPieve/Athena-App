@@ -23,16 +23,33 @@ export type ConfirmOptions = {
   nota?: string;
   confirmar?: string;
   perigo?: boolean;
+  /**
+   * Caixa de marcar dentro do diálogo, para a decisão que anda junto da
+   * principal — hoje só "apagar da nuvem também".
+   *
+   * Fica aqui, e não num segundo botão, porque são perguntas de nível
+   * diferente: o botão decide SE apaga, a caixa decide ATÉ ONDE. Dois botões
+   * destrutivos lado a lado convidariam ao clique errado.
+   */
+  caixa?: { rotulo: string; inicial?: boolean };
 };
 
 type Pedido = ConfirmOptions & { resolve: (ok: boolean) => void };
 
 export function useConfirm() {
   const [pedido, setPedido] = useState<Pedido | null>(null);
+  /**
+   * Estado da caixa, em ref e não em state: quem chamou lê DEPOIS do await,
+   * quando o diálogo já saiu da tela — um state teria sido zerado junto.
+   */
+  const caixaMarcada = useRef(false);
 
   const confirmar = useCallback(
     (opts: ConfirmOptions) =>
-      new Promise<boolean>((resolve) => setPedido({ ...opts, resolve })),
+      new Promise<boolean>((resolve) => {
+        caixaMarcada.current = opts.caixa?.inicial ?? false;
+        setPedido({ ...opts, resolve });
+      }),
     [],
   );
 
@@ -44,18 +61,27 @@ export function useConfirm() {
     [pedido],
   );
 
-  const dialogo = pedido ? <ConfirmDialog pedido={pedido} onFechar={fechar} /> : null;
+  const dialogo = pedido ? (
+    <ConfirmDialog
+      pedido={pedido}
+      onFechar={fechar}
+      marcada={caixaMarcada}
+    />
+  ) : null;
 
-  return { confirmar, dialogo };
+  return { confirmar, dialogo, caixaMarcada };
 }
 
 function ConfirmDialog({
   pedido,
   onFechar,
+  marcada,
 }: {
   pedido: Pedido;
   onFechar: (ok: boolean) => void;
+  marcada: React.MutableRefObject<boolean>;
 }) {
+  const [caixa, setCaixa] = useState(pedido.caixa?.inicial ?? false);
   // O foco nasce em Cancelar de propósito: a ação é destrutiva e Enter por
   // reflexo não pode apagar arquivo.
   const cancelar = useRef<HTMLButtonElement>(null);
@@ -93,6 +119,31 @@ function ConfirmDialog({
 
         {pedido.detalhe && (
           <pre className="modal-detalhe scroll">{pedido.detalhe}</pre>
+        )}
+
+        {pedido.caixa && (
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              margin: "14px 0 0",
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              cursor: "pointer",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={caixa}
+              onChange={(e) => {
+                setCaixa(e.target.checked);
+                marcada.current = e.target.checked;
+              }}
+              style={{ marginTop: 2 }}
+            />
+            <span>{pedido.caixa.rotulo}</span>
+          </label>
         )}
 
         {pedido.nota && (

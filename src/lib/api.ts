@@ -217,7 +217,18 @@ type AthenaBridge = {
     rename(rel: string, nome: string): Promise<string>;
     /** Move arquivo/pasta para dentro de outra pasta (drag-and-drop). Devolve o novo rel. */
     mover(relOrigem: string, relPastaDestino: string): Promise<string>;
-    trash(rel: string): Promise<boolean>;
+    /** Copia arquivos/pastas de fora do app para dentro de uma pasta do vault. */
+    importar(
+      relPastaDestino: string,
+      origens: string[],
+    ): Promise<{ copiados: number; jaExistiam: string[] }>;
+    /** Caminho real de um File solto na janela (só existe no Electron). */
+    caminhoDoArquivo(f: File): string;
+    /**
+     * Manda para a lixeira do Windows. Com `naNuvem`, tira também do R2 e do
+     * banco — e aí não volta em máquina nenhuma. Devolve o que saiu da nuvem.
+     */
+    trash(rel: string, naNuvem?: boolean): Promise<{ r2: number; banco: number }>;
     openExternal(rel: string): Promise<boolean>;
     pasteImage(base: string, ext: string, data: Uint8Array): Promise<string>;
     lessons(): Promise<{ slug: string; subject: string }[]>;

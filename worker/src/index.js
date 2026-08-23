@@ -26,6 +26,7 @@
  *   GET  /f?k=<chave>               -> o arquivo
  *   HEAD /f?k=<chave>               -> só os cabeçalhos (inclui x-athena-sha256)
  *   PUT  /f?k=<chave>               -> grava o arquivo
+ *   DELETE /f?k=<chave>             -> apaga o arquivo (uma chave por vez)
  *   GET  /health                    -> "ok" (sem token)
  *
  * O PUT existe para o app poder PUBLICAR sem credencial do R2 — mesma regra do
@@ -86,8 +87,8 @@ export default {
     const url = new URL(request.url);
 
     if (url.pathname === "/health") return new Response("ok");
-    if (!["GET", "HEAD", "PUT"].includes(request.method)) {
-      return json({ erro: "Só GET, HEAD ou PUT." }, 405);
+    if (!["GET", "HEAD", "PUT", "DELETE"].includes(request.method)) {
+      return json({ erro: "Só GET, HEAD, PUT ou DELETE." }, 405);
     }
 
     const auth = request.headers.get("authorization") ?? "";
@@ -148,6 +149,23 @@ export default {
         });
       } catch (e) {
         return json({ erro: `O R2 recusou a gravação: ${e.message}` }, 502);
+      }
+      return json({ ok: true, key });
+    }
+
+    /* ---------- apagar ---------- */
+    if (url.pathname === "/f" && request.method === "DELETE") {
+      const key = url.searchParams.get("k") ?? "";
+      if (!key) return json({ erro: "Falta ?k=<chave>." }, 400);
+      if (!key.startsWith(meu)) return json({ erro: "Esse arquivo não é desta conta." }, 403);
+
+      // Uma chave por pedido, e nunca por prefixo: quem quiser apagar uma
+      // pasta manda um pedido por arquivo. Apagar por prefixo transformaria um
+      // erro de digitacao em perda de uma materia inteira num pedido so.
+      try {
+        await env.BUCKET.delete(key);
+      } catch (e) {
+        return json({ erro: `O R2 recusou a remoção: ${e.message}` }, 502);
       }
       return json({ ok: true, key });
     }

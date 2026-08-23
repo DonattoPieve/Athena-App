@@ -147,8 +147,26 @@ export function migrarNomesAntigos(vaultRoot: string): string[] {
   return feitas;
 }
 
+/** Quantos arquivos ha dentro de uma pasta — so para contar o que foi copiado. */
+function contarArquivos(dir: string): number {
+  let n = 0;
+  for (const it of fsSync.readdirSync(dir, { withFileTypes: true })) {
+    if (it.isDirectory()) n += contarArquivos(path.join(dir, it.name));
+    else if (it.isFile()) n++;
+  }
+  return n;
+}
+
 export class Vault {
-  constructor(public readonly root: string) {}
+  readonly root: string;
+
+  // Campo declarado a mao, e nao `constructor(public readonly root)`: o
+  // parametro-propriedade e sintaxe que so o compilador do TypeScript entende,
+  // e o Node se recusa a carregar o arquivo (ele apenas TIRA os tipos). Sem
+  // isto, `scripts/importar.test.mjs` nao consegue nem importar este modulo.
+  constructor(root: string) {
+    this.root = root;
+  }
 
   static isVault(dir: string): boolean {
     if (!fsSync.existsSync(path.join(dir, "CLAUDE.md"))) return false;
@@ -238,7 +256,10 @@ export class Vault {
     }
     const out: TreeNode[] = [];
     for (const e of entries) {
-      if (e.name.startsWith(".") || IGNORED.has(e.name)) continue;
+      // `.parcial` e download pela metade (ver materiais.ts). Hoje ele nasce
+      // escondido em `.athena/`, mas versao antiga deixava um ao lado do
+      // arquivo de verdade — e um PDF truncado na arvore parece material bom.
+      if (e.name.startsWith(".") || e.name.endsWith(".parcial") || IGNORED.has(e.name)) continue;
       const childRel = path.posix.join(rel, e.name);
       if (e.isDirectory()) {
         out.push({
@@ -381,6 +402,24 @@ export class Vault {
   // rapida de perder o material do professor ou uma pagina gerada.
   // ------------------------------------------------------------------
 
+  /**
+   * ACRESCENTAR vale numa area maior que EDITAR — a mesma linha do `importar`.
+   *
+   * Criar pasta e criar arquivo novo nao podem destruir nada: as duas recusam
+   * nome que ja existe. Por isso valem em `Notes/` inteiro, INATEL incluido —
+   * e assim uma materia nova entra pelo menu, nao so pelo Explorer do Windows.
+   * Sobrescrever (`write`), renomear, mover e apagar continuam com a regra
+   * estreita do `isWritable`.
+   */
+  private assertImportavel(rel: string, acao: string) {
+    if (!this.isImportavel(rel)) {
+      throw new Error(
+        `${acao} bloqueado em "${rel}". O app cria em Notes/ (inclusive ` +
+          `Notes/INATEL); pagina de Resumos/ nasce do ingest.`,
+      );
+    }
+  }
+
   private assertWritable(rel: string, acao: string) {
     if (!this.isWritable(rel)) {
       throw new Error(
@@ -391,7 +430,7 @@ export class Vault {
   }
 
   async mkdir(rel: string): Promise<void> {
-    this.assertWritable(rel, "Criar pasta");
+    this.assertImportavel(rel, "Criar pasta");
     const abs = this.resolve(rel);
     if (fsSync.existsSync(abs)) throw new Error(`Ja existe: ${rel}`);
     await fs.mkdir(abs, { recursive: true });
@@ -399,7 +438,7 @@ export class Vault {
 
   /** Cria arquivo novo. Recusa sobrescrever — isso e trabalho do usuario. */
   async create(rel: string, content = ""): Promise<void> {
-    this.assertWritable(rel, "Criar arquivo");
+    this.assertImportavel(rel, "Criar arquivo");
     const abs = this.resolve(rel);
     if (fsSync.existsSync(abs)) throw new Error(`Ja existe: ${rel}`);
     await fs.mkdir(path.dirname(abs), { recursive: true });
@@ -483,7 +522,93 @@ export class Vault {
     const norm = rel.split(path.sep).join("/").replace(/^\/+/, "");
     if (!norm) return false;
     if (norm === RESUMOS || norm.startsWith(RESUMOS + "/")) return true;
-    return this.isWritable(norm);
+    // `Notes/INATEL` entra aqui, e nao entra no `isWritable`: EDITAR o material
+    // do professor corrompe a fonte em silencio, mas APAGAR e visivel, vai para
+    // a lixeira do Windows, e — com o espelho — o que ficou na nuvem volta no
+    // proximo clique. Tirar da nuvem tambem e outra decisao, tomada no dialogo
+    // (ver `apagarNaNuvem` em publicar.ts).
+    return this.isImportavel(norm);
+  }
+
+  /**
+   * Onde da para DEPOSITAR arquivo vindo de fora do app.
+   *
+   * `Notes/INATEL` continua somente leitura para EDITAR — material do professor
+   * e a fonte que o ingest le, e uma alteracao ali corrompe a origem sem deixar
+   * rastro. ACRESCENTAR e outra coisa: e como uma materia nova entra no vault,
+   * e proibir isso obrigava a abrir o Explorer do Windows por fora do app.
+   *
+   * A garantia continua de pe pelo outro lado: `importar` NUNCA sobrescreve.
+   * Nome que ja existe e recusado, nao substituido — entao nenhum arrastar
+   * distraido pode trocar o PDF do professor por outro.
+   *
+   * `Resumos/` fica de fora: pagina de la nasce do ingest, nao de arquivo solto.
+   */
+  isImportavel(rel: string): boolean {
+    const norm = rel.split(path.sep).join("/").replace(/^\/+/, "");
+    return norm === NOTAS || norm.startsWith(NOTAS + "/");
+  }
+
+  /**
+   * Copia arquivos e pastas de fora para dentro do vault.
+   *
+   * Copia, nao move: o que voce arrastou continua onde estava, porque o
+   * contrario transformaria um arrastar errado em perda do original.
+   *
+   * Devolve o que entrou e o que foi recusado por ja existir, para a tela poder
+   * dizer as duas coisas — "nao aconteceu nada" e "sobrescrevi" sao mensagens
+   * bem diferentes.
+   */
+  async importar(
+    relPastaDestino: string,
+    origens: string[],
+  ): Promise<{ copiados: number; jaExistiam: string[] }> {
+    if (!this.isImportavel(relPastaDestino)) {
+      throw new Error(
+        `Nao da para adicionar arquivo em "${relPastaDestino}". O app aceita ` +
+          `arquivo novo em Notes/ (inclusive Notes/INATEL); Resumos/ nasce do ingest.`,
+      );
+    }
+    const destinoDir = this.resolve(relPastaDestino);
+    // A pasta pode existir so no espelho do R2 (nada dela baixado ainda) — e
+    // soltar material dentro dela e legitimo. Criar aqui e o mesmo que o
+    // Explorer do Windows faria; recusar seria um "nao" sem motivo visivel.
+    if (!fsSync.existsSync(destinoDir)) {
+      await fs.mkdir(destinoDir, { recursive: true });
+    } else if (!fsSync.statSync(destinoDir).isDirectory()) {
+      throw new Error(`Destino nao e uma pasta: ${relPastaDestino}`);
+    }
+
+    const raiz = path.resolve(this.root);
+    let copiados = 0;
+    const jaExistiam: string[] = [];
+
+    for (const origem of origens) {
+      if (!origem) continue;
+      const de = path.resolve(origem);
+      // Arrastar de dentro do proprio vault e mover, nao importar — e copiar
+      // faria uma segunda copia silenciosa do mesmo material.
+      if (de === raiz || de.startsWith(raiz + path.sep)) {
+        throw new Error("Esse arquivo ja esta no vault. Arraste dentro da arvore para mover.");
+      }
+      if (!fsSync.existsSync(de)) continue;
+
+      const nome = path.basename(de);
+      const destino = path.join(destinoDir, nome);
+      if (fsSync.existsSync(destino)) {
+        jaExistiam.push(nome);
+        continue;
+      }
+
+      if (fsSync.statSync(de).isDirectory()) {
+        await fs.cp(de, destino, { recursive: true, force: false, errorOnExist: true });
+        copiados += contarArquivos(destino);
+      } else {
+        await fs.copyFile(de, destino, fsSync.constants.COPYFILE_EXCL);
+        copiados++;
+      }
+    }
+    return { copiados, jaExistiam };
   }
 
   /** Caminho absoluto para a lixeira do sistema (quem chama e o main). */

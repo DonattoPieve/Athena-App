@@ -1,6 +1,6 @@
 {
   "name": "athena-app",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "private": true,
   "description": "Cliente desktop do vault Athena — ingest, review, delete e publish sem terminal",
   "main": "dist/electron/main.js",
@@ -15,7 +15,8 @@
     "test:progresso": "node scripts/progresso.test.mjs",
     "test:worker": "node worker/teste.mjs",
     "test:espelho": "node scripts/espelho.test.mjs",
-    "test": "npm run test:md && npm run test:progresso && npm run test:worker && npm run test:espelho",
+    "test:importar": "node scripts/importar.test.mjs",
+    "test": "npm run test:md && npm run test:progresso && npm run test:worker && npm run test:espelho && npm run test:importar",
     "worker:deploy": "npx --yes wrangler deploy --config worker/wrangler.jsonc",
     "dist": "npm run clean && npm run build && electron-builder --win --publish never",
     "dist:publish": "npm run clean && npm run build && electron-builder --win --publish always",

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 /**
  * Unica superficie que o renderer enxerga. Sem fs, sem child_process,
@@ -78,7 +78,24 @@ const api = {
     rename: (rel: string, nome: string) => ipcRenderer.invoke("fs:rename", rel, nome),
     mover: (relOrigem: string, relPastaDestino: string) =>
       ipcRenderer.invoke("fs:mover", relOrigem, relPastaDestino),
-    trash: (rel: string) => ipcRenderer.invoke("fs:trash", rel),
+    importar: (relPastaDestino: string, origens: string[]) =>
+      ipcRenderer.invoke("fs:importar", relPastaDestino, origens),
+    /**
+     * Caminho real de um `File` solto na janela.
+     *
+     * O `File` do navegador esconde o caminho de proposito; no Electron o
+     * `webUtils.getPathForFile` e a forma suportada de recupera-lo (o antigo
+     * `file.path` foi removido). Sem isto o arrastar de fora nao teria como
+     * dizer ao main O QUE copiar.
+     */
+    caminhoDoArquivo: (f: File): string => {
+      try {
+        return webUtils.getPathForFile(f);
+      } catch {
+        return (f as File & { path?: string }).path ?? "";
+      }
+    },
+    trash: (rel: string, naNuvem = false) => ipcRenderer.invoke("fs:trash", rel, naNuvem),
     openExternal: (rel: string) => ipcRenderer.invoke("fs:openExternal", rel),
     pasteImage: (base: string, ext: string, data: Uint8Array) =>
       ipcRenderer.invoke("fs:pasteImage", base, ext, data),

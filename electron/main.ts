@@ -18,6 +18,7 @@ import { Vault, migrarNomesAntigos, slugify } from "./vault";
 import { ClaudeRunner, Cmd, SessionEvent } from "./claude";
 import * as account from "./account";
 import * as publish from "./publish";
+import { apagarNaNuvem } from "./publicar";
 import * as biblioteca from "./biblioteca";
 import * as usage from "./usage";
 import * as bootstrap from "./bootstrap";
@@ -561,11 +562,40 @@ function registerIpc() {
   ipcMain.handle("fs:mover", (_e, relOrigem: string, relPastaDestino: string) =>
     requireVault().mover(relOrigem, relPastaDestino),
   );
-  ipcMain.handle("fs:trash", async (_e, rel: string) => {
-    // Lixeira do Windows, nao unlink: apagar a nota errada com dois cliques
-    // precisa ter volta, e o Notes/ e a unica copia local do seu texto.
-    await shell.trashItem(requireVault().trashTarget(rel));
-    return true;
+  /**
+   * Arrastar de FORA do app para dentro da arvore (Explorer do Windows).
+   *
+   * E como uma materia nova entra em `Notes/INATEL` sem abrir o Explorer por
+   * fora. Copia, e nunca sobrescreve — ver `importar` no vault.ts. Nada sobe
+   * para o R2 aqui: o material so vai para a nuvem quando o Donatto publica.
+   */
+  ipcMain.handle("fs:importar", (_e, relPastaDestino: string, origens: string[]) =>
+    requireVault().importar(relPastaDestino, origens),
+  );
+  /**
+   * Apagar. Sempre para a lixeira do Windows; na nuvem, so se pedirem.
+   *
+   * A ORDEM importa: a nuvem primeiro, o disco depois. Se o Worker recusar,
+   * o arquivo local continua onde estava e o erro sobe para a tela — o
+   * contrario deixaria a pessoa sem a copia local E com a da nuvem intacta,
+   * achando que apagou.
+   */
+  ipcMain.handle("fs:trash", async (_e, rel: string, naNuvem = false) => {
+    const v = requireVault();
+    // Valida a permissao ANTES de tocar na nuvem: `trashTarget` recusa
+    // caminho que nao pode ser apagado.
+    const alvo = v.trashTarget(rel);
+
+    let apagados = { r2: 0, banco: 0 };
+    if (naNuvem) {
+      apagados = await apagarNaNuvem(v.root, rel, (linha) => runner?.log(linha));
+    }
+
+    // Pode nao existir no disco: no que so estava no espelho, apagar e
+    // exatamente tirar da nuvem, e nao ha o que mandar para a lixeira.
+    if (fs.existsSync(alvo)) await shell.trashItem(alvo);
+    send("vault:changed", null);
+    return apagados;
   });
   ipcMain.handle("fs:openExternal", async (_e, rel: string) => {
     // PPT, DOCX e afins: abre no programa padrao do Windows.

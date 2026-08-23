@@ -45,6 +45,9 @@ const BUCKET = {
       sha256: opcoes?.customMetadata?.sha256 ?? null,
     });
   },
+  async delete(key) {
+    objetos.delete(key);
+  },
   async get(key) {
     const o = objetos.get(key);
     if (!o) return null;
@@ -205,9 +208,36 @@ await caso("gravar sem token dá 401", async () => {
   assert.equal(r.status, 401);
 });
 
-await caso("apagar não existe", async () => {
+await caso("apaga o proprio arquivo", async () => {
+  const key = `u/${A}/inatel/E09-Microcontroladores/Lógicas Bit a Bit.pdf`;
+  assert.equal(objetos.has(key), true);
+  const r = await chamar(`/f?k=${encodeURIComponent(key)}`, "token-A", { method: "DELETE" });
+  assert.equal(r.status, 200, await r.text());
+  assert.equal(objetos.has(key), false, "o objeto continuou no bucket");
+  assert.equal((await chamar(`/f?k=${encodeURIComponent(key)}`, "token-A")).status, 404);
+  // Devolve o objeto ao bucket de mentira: o caso de ponta a ponta la embaixo
+  // conta os tres arquivos da conta A.
+  guardar(key, "pdf-A2", "h2");
+});
+
+await caso("NAO apaga arquivo de outra conta", async () => {
+  const key = `u/${B}/inatel/D01-Outra-Materia/aula.pdf`;
+  const r = await chamar(`/f?k=${encodeURIComponent(key)}`, "token-A", { method: "DELETE" });
+  assert.equal(r.status, 403);
+  assert.equal(objetos.has(key), true, "apagou mesmo com 403");
+});
+
+await caso("apagar sem token dá 401", async () => {
+  const key = `u/${A}/inatel/T02-Redes/01 - Introdução.pdf`;
+  const r = await chamar(`/f?k=${encodeURIComponent(key)}`, null, { method: "DELETE" });
+  assert.equal(r.status, 401);
+  assert.equal(objetos.has(key), true, "apagou sem token");
+});
+
+await caso("método fora da lista continua 405", async () => {
   const r = await chamar(`/f?k=${encodeURIComponent(`u/${A}/inatel/x.pdf`)}`, "token-A", {
-    method: "DELETE",
+    method: "POST",
+    body: "x",
   });
   assert.equal(r.status, 405);
 });

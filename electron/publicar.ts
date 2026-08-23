@@ -3,7 +3,15 @@ import * as fsSync from "node:fs";
 import * as path from "node:path";
 import { createHash } from "node:crypto";
 import { clienteAutenticado } from "./account";
-import { esquecer, listar, subir, type Grupo, type ObjetoRemoto } from "./materiais";
+import {
+  apagar,
+  chavesDe,
+  esquecer,
+  listar,
+  subir,
+  type Grupo,
+  type ObjetoRemoto,
+} from "./materiais";
 
 /**
  * O `athena publish`, sem terminal — espelha `Resumos/`, `Notes/subjects/` e o
@@ -663,4 +671,83 @@ async function subirBinarios(
     `R2: ${envios.novo} novo(s), ${envios.atualizado} atualizado(s), ${envios.igual} já no bucket.`,
   );
   for (const e of enviados) onLinha(`  ↑ ${e}`);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * Apagar tambem da nuvem
+ * ------------------------------------------------------------------ */
+
+/**
+ * Tira da nuvem o que corresponde a um caminho do vault.
+ *
+ * Existe porque, com o espelho, apagar so no disco deixou de significar
+ * alguma coisa: o arquivo continua no bucket, volta a aparecer na arvore como
+ * "na nuvem" e desce de novo no primeiro clique. Quem quer se livrar do
+ * material precisa de uma porta que chegue la — e ela e esta, chamada SO
+ * depois da confirmacao explicita no dialogo.
+ *
+ * Dois destinos, porque sao dois lugares diferentes:
+ *
+ *   `Notes/INATEL/...`, `Notes/attachments/...`  -> objetos no R2
+ *   `Notes/subjects/<MATERIA>/<arquivo>.md`      -> linha na tabela `notes`
+ *
+ * `Resumos/` NAO passa por aqui de proposito: pagina gerada sai pelo
+ * `athena delete`, que tambem desfaz as ligacoes do MOC e anota no log —
+ * apagar so a linha deixaria o indice apontando para o vazio.
+ *
+ * Falha parcial e informada, nao engolida: o arquivo local so vai para a
+ * lixeira depois que isto volta sem erro (ver `fs:trash` no main).
+ */
+export async function apagarNaNuvem(
+  vaultRoot: string,
+  relVault: string,
+  onLinha: (s: string) => void,
+): Promise<{ r2: number; banco: number }> {
+  const rel = relVault.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+  let r2 = 0;
+  let banco = 0;
+
+  /* ---------- binarios no R2 ---------- */
+  const chaves = await chavesDe(vaultRoot, rel);
+  for (const chave of chaves) {
+    await apagar(vaultRoot, chave);
+    r2++;
+    onLinha(`  nuvem: ${chave.split("/").slice(2).join("/")}`);
+  }
+
+  /* ---------- notas no Supabase ---------- */
+  // `Notes/subjects/<MATERIA>` (a materia inteira) ou um .md dentro dela.
+  const m = /^Notes\/subjects\/([^/]+)(?:\/(.+))?$/.exec(rel);
+  if (m) {
+    const { supabase } = await clienteAutenticado(vaultRoot);
+    const materia = m[1];
+    const arquivo = m[2];
+
+    const { data: mat, error: errMat } = await supabase
+      .from("subjects")
+      .select("id")
+      .eq("slug", materia)
+      .maybeSingle();
+    if (errMat) throw new Error(`Não consegui achar a matéria no banco: ${errMat.message}`);
+
+    if (mat?.id) {
+      // O slug da nota e o mesmo que o publish grava: slugify do nome do
+      // arquivo. Se essa regra mudar la, muda aqui junto.
+      let q = supabase
+        .from("notes")
+        .delete({ count: "exact" })
+        .eq("subject_id", mat.id as string);
+      if (arquivo) {
+        if (!arquivo.endsWith(".md")) return { r2, banco };
+        q = q.eq("slug", slugify(arquivo));
+      }
+      const { error, count } = await q;
+      if (error) throw new Error(`Não consegui remover a nota do banco: ${error.message}`);
+      banco = count ?? 0;
+      if (banco) onLinha(`  banco: ${banco} nota(s) de ${materia}`);
+    }
+  }
+
+  return { r2, banco };
 }
