@@ -1,7 +1,12 @@
 import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  type Session,
+  type SupabaseClient,
+  type User,
+} from "@supabase/supabase-js";
 
 /**
  * Conta do Athena (Supabase) — a MESMA sessao do `athena login`.
@@ -105,6 +110,36 @@ function ehFalhaDeRede(e: unknown): boolean {
 
 const BUCKET = "avatars";
 
+/* ------------------------------------------------------------------ *
+ * A sessao viva — uma porta so
+ * ------------------------------------------------------------------ */
+
+export type Sessao = { supabase: SupabaseClient; user: User; session: Session };
+
+/**
+ * Refresh token do Supabase E DE USO UNICO: cada `refreshSession` devolve um
+ * novo e mata o anterior. Duas chamadas em PARALELO com o mesmo token fazem a
+ * segunda voltar "Invalid Refresh Token" — e o app lia isso como "nao tem
+ * conta", soltava o vault e mostrava "Nenhum vault selecionado" com a sessao
+ * ainda boa no disco.
+ *
+ * Isso era raro enquanto so o publish pedia token. Virou constante quando o
+ * espelho do R2 passou a pedir a cada carga da arvore. A correcao e a porta
+ * unica: quem chega no meio de um refresh espera o MESMO resultado, e por 10
+ * minutos o resultado guardado serve a todos (o access token vale ~1 h).
+ *
+ * A chave e a raiz do vault porque as credenciais podem sair do
+ * `athena-web/.env.local` de dentro dele.
+ */
+const VALIDADE_MS = 10 * 60 * 1000;
+let viva: { raiz: string; em: number; valor: Sessao } | null = null;
+let emVoo: { raiz: string; p: Promise<Sessao> } | null = null;
+
+/** Descarta a sessao guardada — toda escrita de sessao nova passa por aqui. */
+function esquecerSessaoViva() {
+  viva = null;
+}
+
 /**
  * Cliente com a sessao do disco ja carregada.
  *
@@ -112,21 +147,39 @@ const BUCKET = "avatars";
  * cliente — sem o `setSession` o Storage sobe como anonimo e a policy recusa.
  * Foi assim que o primeiro upload voltou "new row violates row-level security".
  */
-export async function clienteAutenticado(vaultRoot: string) {
+export async function clienteAutenticado(vaultRoot: string): Promise<Sessao> {
+  if (viva && viva.raiz === vaultRoot && Date.now() - viva.em < VALIDADE_MS) {
+    return viva.valor;
+  }
+  if (emVoo) {
+    if (emVoo.raiz === vaultRoot) return emVoo.p;
+    // Raiz diferente no meio do caminho (troca de conta): espera a que esta
+    // em voo terminar em vez de queimar o token junto com ela.
+    await emVoo.p.catch(() => {});
+    return clienteAutenticado(vaultRoot);
+  }
+  const p = renovarSessao(vaultRoot).finally(() => {
+    if (emVoo?.p === p) emVoo = null;
+  });
+  emVoo = { raiz: vaultRoot, p };
+  return p;
+}
+
+async function renovarSessao(vaultRoot: string): Promise<Sessao> {
   const file = sessionFile();
-  if (!fs.existsSync(file)) throw new Error("Sem sessão nesta máquina.");
+  if (!fs.existsSync(file)) throw new Error("Sem sessao nesta maquina.");
   const { refresh_token } = JSON.parse(fs.readFileSync(file, "utf8"));
 
   const supabase = makeClient(vaultRoot);
   const { data, error } = await supabase.auth.refreshSession({ refresh_token });
-  if (error || !data.session || !data.user) throw new Error("Sessão expirada. Entre de novo.");
+  if (error) throw new Error(error.message);
+  if (!data.session || !data.user) throw new Error("Sessao expirada. Entre de novo.");
   saveSession(vaultRoot, data.session.refresh_token);
   await supabase.auth.setSession(data.session);
-  // A sessao vai junto porque o `access_token` e o que o Worker do R2 pede
-  // para provar de quem e o pedido (ver bootstrap.ts). Ele so existe aqui: o
-  // cliente nao o expoe depois, e reler o arquivo daria o refresh token, que
-  // e outra coisa.
-  return { supabase, user: data.user, session: data.session };
+
+  const valor: Sessao = { supabase, user: data.user, session: data.session };
+  viva = { raiz: vaultRoot, em: Date.now(), valor };
+  return valor;
 }
 
 /** Le o avatar do perfil. Falha aqui nao pode derrubar o login. */
@@ -328,6 +381,8 @@ export function hasSession(_vaultRoot?: string): boolean {
 }
 
 function saveSession(_vaultRoot: string, refreshToken: string) {
+  // Sessao nova: a guardada em memoria envelheceu neste instante.
+  esquecerSessaoViva();
   const file = sessionFile();
   const conteudo = JSON.stringify(
     { refresh_token: refreshToken, saved_at: new Date().toISOString() },
@@ -350,6 +405,7 @@ function saveSession(_vaultRoot: string, refreshToken: string) {
 }
 
 export function logout(_vaultRoot?: string) {
+  esquecerSessaoViva();
   const file = sessionFile();
   if (fs.existsSync(file)) fs.rmSync(file);
   // Sem isto o modo offline ressuscitaria a conta de quem acabou de sair.
@@ -364,27 +420,16 @@ export function logout(_vaultRoot?: string) {
 
 /**
  * Quem esta logado nesta maquina, ou null.
- * Rotaciona o refresh token, porque o Supabase invalida o anterior a cada uso.
+ *
+ * Passa pela mesma porta do `clienteAutenticado`: chamar `refreshSession`
+ * por fora dela era a outra metade da corrida que derrubava a sessao.
  */
 export async function status(vaultRoot: string): Promise<Account | null> {
-  const file = sessionFile();
-  if (!fs.existsSync(file)) return null;
+  if (!fs.existsSync(sessionFile())) return null;
 
-  let refresh_token: string;
+  let sessao: Sessao;
   try {
-    refresh_token = JSON.parse(fs.readFileSync(file, "utf8")).refresh_token;
-  } catch {
-    return null;
-  }
-  if (!refresh_token) return null;
-
-  const supabase = makeClient(vaultRoot);
-
-  let data;
-  try {
-    const r = await supabase.auth.refreshSession({ refresh_token });
-    if (r.error) throw new Error(r.error.message);
-    data = r.data;
+    sessao = await clienteAutenticado(vaultRoot);
   } catch (e) {
     // Sem rede o vault continua no disco. Entrar pelo cache e o certo aqui;
     // devolver null jogaria a pessoa numa tela de login que tambem precisa
@@ -392,11 +437,8 @@ export async function status(vaultRoot: string): Promise<Account | null> {
     const cache = ehFalhaDeRede(e) ? contaEmCache() : null;
     return cache ? { ...cache, offline: true } : null;
   }
-  if (!data.session || !data.user) return null;
 
-  saveSession(vaultRoot, data.session.refresh_token);
-  await supabase.auth.setSession(data.session);
-  const conta = await contaDe(supabase, data.user);
+  const conta = await contaDe(sessao.supabase, sessao.user);
   guardarConta(conta);
   return conta;
 }

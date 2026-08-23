@@ -21,15 +21,22 @@ import {
  * dois ou três arquivos.
  *
  * COMO FICA: o primeiro uso traz só o texto (páginas e notas, alguns MB). Cada
- * binário é buscado na PRIMEIRA vez que é aberto e guardado em
- * `%APPDATA%\athena-app\cache`. Da segunda em diante sai do disco — e sem
- * internet também, que era a exigência: uma vez visto, sempre disponível.
+ * binário é buscado na PRIMEIRA vez que é aberto e gravado NO VAULT, no lugar
+ * onde o arquivo sempre morou (`Notes/INATEL/...`). Da segunda em diante sai
+ * do disco — e sem internet também, que era a exigência: uma vez visto, sempre
+ * disponível.
+ *
+ * VAI PARA O VAULT, não para uma pasta escondida: assim o arquivo existe de
+ * verdade — aparece no Explorer do Windows, o `ingest` do Claude Code o
+ * encontra pelo caminho que o `CLAUDE.md` manda abrir, e a linha deixa de ser
+ * "da nuvem" na árvore. O `%APPDATA%\athena-app\cache` continua sendo LIDO,
+ * para quem baixou antes desta mudança não baixar tudo de novo.
  *
  * A ORDEM DE BUSCA é sempre a mesma, e o disco vem antes da rede:
  *
- *   1. o vault (quem já tinha tudo baixado continua lendo de lá)
- *   2. o cache
- *   3. o Worker do R2 — e o que vier é gravado no cache
+ *   1. o vault
+ *   2. o cache antigo
+ *   3. o Worker do R2 — e o que vier é gravado no vault
  *
  * O ESPELHO é o que torna tudo isso visível. Baixar sob demanda só funciona se
  * o arquivo APARECER antes de descer: num PC novo `Notes/INATEL` está vazio, e
@@ -141,10 +148,31 @@ async function tokenDaConta(vaultRoot: string): Promise<string> {
  */
 const listagens = new Map<Grupo, ObjetoRemoto[]>();
 
+/**
+ * Pedidos iguais que chegam juntos viram UM.
+ *
+ * A arvore e carregada mais de uma vez na abertura (o escopo aberto e a lista
+ * que a busca varre), e sem isto cada uma abriria a sua ida ao Worker — duas
+ * chamadas identicas, e antes da porta unica do `account.ts` isso ainda
+ * queimava o refresh token uma vez a mais.
+ */
+const emVoo = new Map<Grupo, Promise<ObjetoRemoto[]>>();
+
 export async function listar(vaultRoot: string, grupo: Grupo): Promise<ObjetoRemoto[]> {
   const guardada = listagens.get(grupo);
   if (guardada) return guardada;
 
+  const indo = emVoo.get(grupo);
+  if (indo) return indo;
+
+  const p = buscarListagem(vaultRoot, grupo).finally(() => {
+    if (emVoo.get(grupo) === p) emVoo.delete(grupo);
+  });
+  emVoo.set(grupo, p);
+  return p;
+}
+
+async function buscarListagem(vaultRoot: string, grupo: Grupo): Promise<ObjetoRemoto[]> {
   const worker = urlWorker(vaultRoot);
   if (!worker) throw new Error("O portão do R2 não foi publicado neste app.");
 
@@ -161,6 +189,7 @@ export async function listar(vaultRoot: string, grupo: Grupo): Promise<ObjetoRem
 /** Esquece as listagens — usado quando o vault (ou a conta) muda. */
 export function esquecer() {
   listagens.clear();
+  emVoo.clear();
   token = null;
 }
 
@@ -337,7 +366,13 @@ export async function garantirParaLeitura(
   const alvo = partirRel(relVault);
   if (!alvo) return null;
 
-  const noCache = path.join(pastaCache(), alvo.grupo, ...alvo.rel.split("/"));
+  const partes = alvo.rel.split("/");
+  const noVault = path.join(vaultRoot, ...DENTRO_DO_VAULT[alvo.grupo].split("/"), ...partes);
+  if (fsSync.existsSync(noVault)) return noVault;
+
+  // Cache de quem baixou antes desta mudanca: aproveita em vez de baixar de
+  // novo. Nada novo e escrito la.
+  const noCache = path.join(pastaCache(), alvo.grupo, ...partes);
   if (fsSync.existsSync(noCache)) return noCache;
 
   const objetos = await listar(vaultRoot, alvo.grupo);
@@ -345,13 +380,13 @@ export async function garantirParaLeitura(
   if (!obj) return null;
 
   const bytes = await baixar(vaultRoot, obj.key);
-  await fs.mkdir(path.dirname(noCache), { recursive: true });
-  // Grava em arquivo temporário e renomeia: se o app fechar no meio do
-  // download, o cache não fica com meio PDF que depois passaria por bom.
-  const parcial = `${noCache}.parcial`;
+  await fs.mkdir(path.dirname(noVault), { recursive: true });
+  // Grava em arquivo temporario e renomeia: se o app fechar no meio do
+  // download, nao fica meio PDF no vault, que depois passaria por bom.
+  const parcial = `${noVault}.parcial`;
   await fs.writeFile(parcial, bytes);
-  await fs.rename(parcial, noCache);
-  return noCache;
+  await fs.rename(parcial, noVault);
+  return noVault;
 }
 
 /**
