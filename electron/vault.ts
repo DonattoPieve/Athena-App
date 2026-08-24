@@ -78,9 +78,14 @@ export type Target = {
   wikiReview: string | null;
   /** copia do material no site */
   material: string | null;
-  /** espelho em athena-web/wiki */
-  mirror: string | null;
-  mirrorReview: string | null;
+  /*
+   * Não há campo de espelho.
+   *
+   * `athena-web/wiki/` existiu enquanto o site lia .md do disco. Desde que
+   * ele passou a ler do Supabase, a pasta não é criada por ninguém e o
+   * CLAUDE.md proíbe recriá-la — procurar por ela aqui devolvia null sempre
+   * e fazia o painel de remoção listar um caminho inexistente.
+   */
   /** MOC da materia */
   moc: string | null;
 };
@@ -331,15 +336,12 @@ export class Vault {
       wikiPage: null,
       wikiReview: null,
       material: null,
-      mirror: null,
-      mirrorReview: null,
       moc: null,
     };
 
     const subjFolder = await this.findFolder("Notes/subjects", code);
     const inatelFolder = await this.findFolder("Notes/INATEL", code);
     const wikiFolder = await this.findFolder("Resumos/subjects", code);
-    const mirrorFolder = await this.findFolder("athena-web/wiki/subjects", code);
     const matFolder = await this.findFolder("athena-web/public/materials", code);
 
     if (wikiFolder) {
@@ -379,12 +381,6 @@ export class Vault {
       const antigo = path.posix.join(wikiFolder, `${lesson}-review.md`);
       if (await this.exists(novo)) t.wikiReview = novo;
       else if (await this.exists(antigo)) t.wikiReview = antigo;
-    }
-    if (mirrorFolder) {
-      const page = path.posix.join(mirrorFolder, `${lesson}.md`);
-      const review = path.posix.join(mirrorFolder, `${lesson}-review.md`);
-      if (await this.exists(page)) t.mirror = page;
-      if (await this.exists(review)) t.mirrorReview = review;
     }
     if (matFolder) {
       const files = await this.listDir(matFolder);

@@ -56,10 +56,11 @@ Aula nova no primeiro teste mistura dois riscos.
 5. **Status vira OK sozinho** — no fim, o painel Publicar sai de "não concluiu"
    para "último comando terminou bem" **sem você clicar em nada**. Se não virar,
    o ingest não chegou ao fim: não publique.
-6. **Antes de publicar, leia a lista** — precisa ter `Resumos/...` **e**
-   `athena-web/wiki/...`. Só `Resumos/` significa espelho não feito: não publique,
-   reprocesse.
-7. **Vercel** — o push dispara o redeploy sozinho; confira a página no site.
+6. **Antes de publicar, leia a lista** — precisa ter `Resumos/...` e, havendo
+   material oficial, a cópia em `athena-web/public/materials/...`. Não existe
+   mais espelho em `athena-web/wiki/`: o site lê do banco.
+7. **Site** — publicar já põe no ar, sem esperar deploy. A Vercel só reconstrói
+   quando o *código* muda.
 
 Se travar no meio, **Interromper** derruba a árvore de processos (inclusive o
 `claude` por baixo do `cmd.exe`) e o `.ingest-status` fica em `FAIL` — que é
@@ -88,7 +89,7 @@ As invariantes do `CLAUDE.md` são código, não promessa:
 |---|---|
 | `Notes/subjects`, `Notes/concepts`, `Notes/games`, `Notes/studies` | leitura e escrita |
 | `Notes/INATEL/` | somente leitura |
-| `Resumos/`, `athena-web/wiki/` | somente leitura |
+| `Resumos/` | somente leitura |
 | fora da raiz do vault | bloqueado |
 
 Editar uma página gerada é impossível pelo app. Correção de conteúdo é
@@ -124,7 +125,7 @@ guarda o **código** do athena-web, e o **conteúdo** viaja pelo Supabase (texto
 pelo Cloudflare R2 (PDF, PPT, imagem). Quem faz isso é
 `athena-web/scripts/athena-publish.mjs`, o mesmo script do passo [2/2] do `.bat`.
 
-O app **roda o script do vault** em vez de reimplementar o espelho: a guarda
+O app **roda o script do vault** em vez de reimplementar a publicação: a guarda
 contra máquina desatualizada, a remoção de órfãos e o upload incremental
 continuam num lugar só, valendo pelo terminal e por aqui.
 

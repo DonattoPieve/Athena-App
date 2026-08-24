@@ -19,8 +19,6 @@ export type Target = {
   wikiPage: string | null;
   wikiReview: string | null;
   material: string | null;
-  mirror: string | null;
-  mirrorReview: string | null;
   moc: string | null;
 };
 

@@ -197,9 +197,7 @@ export function CommandBar({ target, busy, onStarted, onVerHistorico }: Props) {
 
   const deleteTargets = [
     alvo.wikiPage,
-    alvo.mirror,
     alvo.wikiReview,
-    alvo.mirrorReview,
     alvo.material,
   ].filter(Boolean) as string[];
 
@@ -354,7 +352,7 @@ export function CommandBar({ target, busy, onStarted, onVerHistorico }: Props) {
           </p>
           <pre className="term">
             {isSubjectScope
-              ? `Resumos/subjects/${alvo.code}-*/\nathena-web/wiki/subjects/${alvo.code}-*/\nathena-web/public/materials/${alvo.code}-*/\n` +
+              ? `Resumos/subjects/${alvo.code}-*/\nathena-web/public/materials/${alvo.code}-*/\n` +
                 tf("linha da matéria em {file}", { file: "index.md" })
               : deleteTargets.join("\n") +
                 (alvo.moc
