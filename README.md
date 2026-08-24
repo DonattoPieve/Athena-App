@@ -195,6 +195,31 @@ nasce em **Cancelar** e `Esc` fecha: ação destrutiva não pode depender de
 `vault.ts` — sobre `Notes/INATEL/` ou `Resumos/`, criar/renomear/apagar aparecem
 desabilitados em vez de falharem depois.
 
+**Arrastar de fora** (Explorer do Windows) copia para dentro do vault — é como
+uma matéria nova entra em `Notes/INATEL` sem sair do app. Copia, nunca move, e
+**nunca sobrescreve**: pasta que já existe é *mesclada* e o arquivo que já está
+lá fica intocado (o `COPYFILE_EXCL` é a última linha de defesa). Arrastar a
+matéria de novo depois de o professor postar mais duas aulas acrescenta só as
+duas.
+
+O alvo é largo de propósito, porque mirar numa linha de 22px com o botão do
+mouse pressionado era metade do problema:
+
+- soltar num **arquivo** cai na pasta dele;
+- soltar no **vazio do painel** cai em `Notes/` — e a faixa tracejada diz isso
+  antes de você soltar;
+- **pasta fechada abre sozinha** depois de meio segundo parado em cima dela, e a
+  árvore rola sozinha quando o cursor encosta na borda;
+- soltar em **qualquer outro lugar da janela** não faz nada, com cursor de
+  proibido. Sem essa guarda (`src/main.tsx` + `will-navigate` no `main.ts`) o
+  Chromium tratava o arquivo solto como página e tirava o app do ar.
+
+Matéria inteira leva minutos, então o main manda o progresso por evento
+(`fs:importando`, no máximo um a cada 120 ms) e a árvore mostra "copiando 12 de
+340" com barra. O recado do fim ("12 arquivo(s) copiado(s)…") some sozinho em
+12 s: com a pasta fechada ele é a única confirmação visível, mas parado ali
+vira legenda permanente.
+
 ### Visualizador de material
 
 PDF abre embutido (o Chromium do Electron já tem leitor). PPT abre no programa

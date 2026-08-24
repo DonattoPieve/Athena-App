@@ -80,6 +80,13 @@ const api = {
       ipcRenderer.invoke("fs:mover", relOrigem, relPastaDestino),
     importar: (relPastaDestino: string, origens: string[]) =>
       ipcRenderer.invoke("fs:importar", relPastaDestino, origens),
+    /** Progresso da copia em andamento; `null` quando acaba (ver fs:importar). */
+    onImportacao: (cb: (p: { feitos: number; total: number; nome: string } | null) => void) => {
+      const handler = (_: unknown, p: { feitos: number; total: number; nome: string } | null) =>
+        cb(p);
+      ipcRenderer.on("fs:importando", handler);
+      return () => ipcRenderer.removeListener("fs:importando", handler);
+    },
     /**
      * Caminho real de um `File` solto na janela.
      *

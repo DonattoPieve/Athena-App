@@ -152,14 +152,56 @@ export function migrarNomesAntigos(vaultRoot: string): string[] {
   return feitas;
 }
 
-/** Quantos arquivos ha dentro de uma pasta — so para contar o que foi copiado. */
-function contarArquivos(dir: string): number {
-  let n = 0;
-  for (const it of fsSync.readdirSync(dir, { withFileTypes: true })) {
-    if (it.isDirectory()) n += contarArquivos(path.join(dir, it.name));
-    else if (it.isFile()) n++;
+/** Um arquivo a copiar, ja resolvido: de onde, para onde, e como se chama na tela. */
+type ItemPlano = { de: string; para: string; rel: string };
+
+/** Quanto ja foi copiado de um arrastar — vai para a tela, ver `importar`. */
+export type ProgressoImportar = { feitos: number; total: number; nome: string };
+
+/**
+ * Monta a lista de arquivos a copiar ANTES de copiar o primeiro.
+ *
+ * Duas razoes para o plano existir: da para dizer "12 de 340" desde o comeco
+ * (uma materia inteira leva minutos, e tela parada parece travada), e o que ja
+ * existe e decidido de uma vez, em vez de ir descobrindo no meio da copia.
+ *
+ * Pasta que ja existe no destino NAO e recusada: ela e mesclada, e so os
+ * arquivos que ja existem ficam de fora. A garantia que importa continua de
+ * pe, arquivo por arquivo — nada e sobrescrito.
+ */
+async function planejarCopia(
+  de: string,
+  para: string,
+  rel: string,
+  plano: ItemPlano[],
+  pastas: string[],
+  jaExistiam: string[],
+): Promise<void> {
+  const info = await fs.stat(de);
+  if (info.isDirectory()) {
+    // A pasta entra no plano mesmo vazia: arrastar uma materia sem arquivo
+    // nenhum ainda tem que criar a pasta dela.
+    pastas.push(para);
+    for (const e of await fs.readdir(de, { withFileTypes: true })) {
+      await planejarCopia(
+        path.join(de, e.name),
+        path.join(para, e.name),
+        `${rel}/${e.name}`,
+        plano,
+        pastas,
+        jaExistiam,
+      );
+    }
+    return;
   }
-  return n;
+  // Link, socket, device: nao e material, e copiar isso para o vault so traria
+  // problema depois.
+  if (!info.isFile()) return;
+  if (fsSync.existsSync(para)) {
+    jaExistiam.push(rel);
+    return;
+  }
+  plano.push({ de, para, rel });
 }
 
 export class Vault {
@@ -261,9 +303,10 @@ export class Vault {
     }
     const out: TreeNode[] = [];
     for (const e of entries) {
-      // `.parcial` e download pela metade (ver materiais.ts). Hoje ele nasce
-      // escondido em `.athena/`, mas versao antiga deixava um ao lado do
-      // arquivo de verdade — e um PDF truncado na arvore parece material bom.
+      // `.parcial` era o temporario do download; hoje o material desce inteiro
+      // na memoria e e gravado de uma vez (ver materiais.ts). A regra segue
+      // pulando o que sobrou de versao antiga — arquivo pela metade na arvore
+      // tem cara de material bom.
       if (e.name.startsWith(".") || e.name.endsWith(".parcial") || IGNORED.has(e.name)) continue;
       const childRel = path.posix.join(rel, e.name);
       if (e.isDirectory()) {
@@ -551,13 +594,25 @@ export class Vault {
    * Copia, nao move: o que voce arrastou continua onde estava, porque o
    * contrario transformaria um arrastar errado em perda do original.
    *
+   * MESCLA pasta que ja existe e NUNCA sobrescreve arquivo — as duas coisas
+   * juntas. Arrastar `C09-Computacao-Grafica` de novo, com dois PDFs novos
+   * dentro, acrescenta os dois e nao toca em mais nada. Antes a pasta inteira
+   * era recusada pelo nome, e a unica saida era abrir a pasta na arvore e
+   * soltar arquivo por arquivo — que e exatamente o trabalho que arrastar a
+   * pasta deveria poupar.
+   *
    * Devolve o que entrou e o que foi recusado por ja existir, para a tela poder
    * dizer as duas coisas — "nao aconteceu nada" e "sobrescrevi" sao mensagens
    * bem diferentes.
+   *
+   * `onProgresso` e chamado a cada arquivo. Materia inteira sao centenas de MB
+   * e minutos de copia; sem isso a tela fica parada entre "soltei" e "acabou",
+   * que e indistinguivel de travado.
    */
   async importar(
     relPastaDestino: string,
     origens: string[],
+    onProgresso?: (p: ProgressoImportar) => void,
   ): Promise<{ copiados: number; jaExistiam: string[] }> {
     if (!this.isImportavel(relPastaDestino)) {
       throw new Error(
@@ -576,7 +631,8 @@ export class Vault {
     }
 
     const raiz = path.resolve(this.root);
-    let copiados = 0;
+    const plano: ItemPlano[] = [];
+    const pastas: string[] = [];
     const jaExistiam: string[] = [];
 
     for (const origem of origens) {
@@ -590,19 +646,26 @@ export class Vault {
       if (!fsSync.existsSync(de)) continue;
 
       const nome = path.basename(de);
-      const destino = path.join(destinoDir, nome);
-      if (fsSync.existsSync(destino)) {
-        jaExistiam.push(nome);
+      await planejarCopia(de, path.join(destinoDir, nome), nome, plano, pastas, jaExistiam);
+    }
+
+    for (const dir of pastas) await fs.mkdir(dir, { recursive: true });
+
+    let copiados = 0;
+    const total = plano.length;
+    for (const item of plano) {
+      try {
+        // COPYFILE_EXCL e a ultima linha de defesa do material do professor: o
+        // plano ja pulou o que existia, mas entre o plano e esta linha alguem
+        // pode ter criado o arquivo por fora.
+        await fs.copyFile(item.de, item.para, fsSync.constants.COPYFILE_EXCL);
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+        jaExistiam.push(item.rel);
         continue;
       }
-
-      if (fsSync.statSync(de).isDirectory()) {
-        await fs.cp(de, destino, { recursive: true, force: false, errorOnExist: true });
-        copiados += contarArquivos(destino);
-      } else {
-        await fs.copyFile(de, destino, fsSync.constants.COPYFILE_EXCL);
-        copiados++;
-      }
+      copiados++;
+      onProgresso?.({ feitos: copiados, total, nome: item.rel });
     }
     return { copiados, jaExistiam };
   }

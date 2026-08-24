@@ -1,7 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as fsSync from "node:fs";
 import * as path from "node:path";
-import { createHash } from "node:crypto";
 import { app } from "electron";
 import { clienteAutenticado } from "./account";
 import type { TreeNode } from "./vault";
@@ -444,28 +443,13 @@ export async function garantirParaLeitura(
   const bytes = await baixar(vaultRoot, obj.key);
   await fs.mkdir(path.dirname(noVault), { recursive: true });
 
-  // Grava fora da vista e so entao renomeia para o lugar final.
+  // Grava direto no lugar final, sem temporario.
   //
-  // O temporario NAO pode ser `<arquivo>.pdf.parcial` ao lado do destino: o
-  // watcher do vault avisa a tela na hora, e o arquivo pela metade aparecia na
-  // arvore com nome de arquivo de verdade. Em `.athena/` ele fica invisivel
-  // (a arvore pula tudo que comeca com ponto) e o rename continua atomico,
-  // porque e o mesmo disco — se o app fechar no meio, sobra lixo escondido,
-  // nunca meio PDF passando por bom.
-  const guardado = path.join(
-    vaultRoot,
-    ".athena",
-    "parciais",
-    `${createHash("sha1").update(obj.key).digest("hex").slice(0, 16)}.parcial`,
-  );
-  await fs.mkdir(path.dirname(guardado), { recursive: true });
-  try {
-    await fs.writeFile(guardado, bytes);
-    await fs.rename(guardado, noVault);
-  } catch (e) {
-    await fs.rm(guardado, { force: true }).catch(() => {});
-    throw e;
-  }
+  // O `baixar` acima so volta com o arquivo INTEIRO na memoria — nao ha
+  // streaming aqui —, entao nao existe o meio-PDF que o `.parcial` protegia:
+  // ou a resposta veio completa, ou o download levantou erro e nada e escrito.
+  // E o mesmo que o `garantirNoVault` logo abaixo sempre fez.
+  await fs.writeFile(noVault, bytes);
   return noVault;
 }
 

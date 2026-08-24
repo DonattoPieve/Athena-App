@@ -14,7 +14,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import chokidar, { FSWatcher } from "chokidar";
-import { Vault, migrarNomesAntigos, slugify } from "./vault";
+import { Vault, migrarNomesAntigos, slugify, type ProgressoImportar } from "./vault";
 import { ClaudeRunner, Cmd, SessionEvent } from "./claude";
 import * as account from "./account";
 import * as publish from "./publish";
@@ -569,9 +569,27 @@ function registerIpc() {
    * fora. Copia, e nunca sobrescreve — ver `importar` no vault.ts. Nada sobe
    * para o R2 aqui: o material so vai para a nuvem quando o Donatto publica.
    */
-  ipcMain.handle("fs:importar", (_e, relPastaDestino: string, origens: string[]) =>
-    requireVault().importar(relPastaDestino, origens),
-  );
+  ipcMain.handle("fs:importar", async (_e, relPastaDestino: string, origens: string[]) => {
+    // O progresso vai por evento, e nao no retorno: quem esta esperando e a
+    // tela DURANTE a copia, e o retorno so chega no fim. Uma materia inteira
+    // sao centenas de arquivos — mandar um evento por arquivo entupiria o IPC
+    // sem que o olho visse a diferenca, entao aqui vai no maximo um a cada
+    // 120 ms (o ultimo sempre passa, senao a barra congela em 97%).
+    let ultimo = 0;
+    const aviso = (p: ProgressoImportar) => {
+      const agora = Date.now();
+      if (p.feitos !== p.total && agora - ultimo < 120) return;
+      ultimo = agora;
+      send("fs:importando", p);
+    };
+    try {
+      return await requireVault().importar(relPastaDestino, origens, aviso);
+    } finally {
+      // Sempre, inclusive quando estourou no meio: senao a tela fica com a
+      // linha de progresso de uma copia que ja acabou.
+      send("fs:importando", null);
+    }
+  });
   /**
    * Apagar. Sempre para a lixeira do Windows; na nuvem, so se pedirem.
    *
@@ -944,6 +962,21 @@ function criarJanela(hash = ""): BrowserWindow {
    */
   janela.webContents.on("before-input-event", (_e, input) => {
     if (input.type === "keyDown" && input.key === "F12") janela.webContents.toggleDevTools();
+  });
+
+  /**
+   * Arquivo solto na janela NUNCA navega.
+   *
+   * Errar o alvo do arrastar (soltar no editor, na lateral, na barra de abas)
+   * fazia o Chromium tratar o arquivo como pagina e sair da aplicacao: em
+   * producao a janela ia para o `file://` do PDF, em dev nem isso — `file://`
+   * e barrado numa pagina servida por `http://localhost:5173`, e sobrava uma
+   * tela quebrada sem explicacao. O renderer ja barra o `drop` (ver
+   * src/main.tsx); isto aqui e a rede embaixo dela, para quando um alvo novo
+   * esquecer o `preventDefault`.
+   */
+  janela.webContents.on("will-navigate", (e, url) => {
+    if (url.startsWith("file://") && !url.includes("/renderer/index.html")) e.preventDefault();
   });
 
   // Se o HTML nem carregar, o DevTools tambem nao ajuda — o erro vai para o

@@ -115,8 +115,12 @@ const EN: Record<string, string> = {
   "Vault pronto.": "Vault ready.",
   "{criados} arquivo(s) criado(s), {iguais} já igual(is).":
     "{criados} file(s) created, {iguais} already up to date.",
+  "{n} arquivo(s) copiado(s) para {destino}": "{n} file(s) copied to {destino}",
   "{n} arquivo(s) já existiam com conteúdo diferente e não foram tocados:":
     "{n} file(s) already existed with different content and weren't touched:",
+  "já existia, não sobrescrevi: {nomes}": "already there, not overwritten: {nomes}",
+  "já existiam, não sobrescrevi: {nomes} e mais {n}":
+    "already there, not overwritten: {nomes} and {n} more",
   "abrindo…": "opening…",
   "abrir apresentação": "open presentation",
   "abrir arquivo": "open file",
@@ -177,6 +181,7 @@ const EN: Record<string, string> = {
   "Conteúdo": "Contents",
   "copiando o material": "copying the material",
   "Copiar caminho": "Copy path",
+  "Copiando {feitos} de {total} — {nome}": "Copying {feitos} of {total} — {nome}",
   "Copiar": "Copy",
   "Criar conta": "Create account",
   "criar uma": "create one",
@@ -276,6 +281,7 @@ const EN: Record<string, string> = {
   "Mover a lateral para a direita": "Move the sidebar to the right",
   "Mover a lateral para a esquerda": "Move the sidebar to the left",
   "na fila": "queued",
+  "Nada a copiar.": "Nothing to copy.",
   "Nada aqui ainda. Botão direito para criar.": "Nothing here yet. Right-click to create.",
   "Nada com esse filtro.": "Nothing with that filter.",
   "Nada com “{q}”.": "Nothing matches “{q}”.",
@@ -379,6 +385,7 @@ const EN: Record<string, string> = {
   "salva em Notes/subjects/{folder}": "saved in Notes/subjects/{folder}",
   "Salvar nota": "Save note",
   "Salvar": "Save",
+  "Solte para copiar em {destino}/": "Drop to copy into {destino}/",
   "Salve a nota antes": "Save the note first",
   "Salve antes — o ingest lê o arquivo do disco": "Save first — ingest reads the file from disk",
   "salvo": "saved",

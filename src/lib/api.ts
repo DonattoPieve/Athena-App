@@ -11,6 +11,9 @@ export type TreeNode = {
 
 export type SubjectRef = { code: string; name: string; folder: string };
 
+/** Quanto ja foi copiado do que voce arrastou de fora — ver electron/vault.ts. */
+export type ProgressoImportar = { feitos: number; total: number; nome: string };
+
 export type Target = {
   code: string;
   lesson: string | null;
@@ -220,6 +223,8 @@ type AthenaBridge = {
       relPastaDestino: string,
       origens: string[],
     ): Promise<{ copiados: number; jaExistiam: string[] }>;
+    /** Progresso da copia em andamento; `null` avisa que acabou. */
+    onImportacao(cb: (p: ProgressoImportar | null) => void): () => void;
     /** Caminho real de um File solto na janela (só existe no Electron). */
     caminhoDoArquivo(f: File): string;
     /**

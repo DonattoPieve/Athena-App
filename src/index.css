@@ -2110,8 +2110,52 @@ kbd {
    do drag, pra distinguir claramente de selecao. */
 .exp-row[data-drop-over="true"] {
   background: var(--c-accent-light);
-  outline: 1px dashed var(--c-accent);
+  /* Tracejado de 2px, e nao de 1: numa lista de dezenas de linhas de 22px o
+     fio de 1px sumia, e soltar uma linha acima do que se queria era o erro
+     mais comum do arrastar. */
+  outline: 2px dashed var(--c-accent);
   outline-offset: -1px;
+  color: var(--c-text);
+}
+
+/* Arrastando de fora, longe de qualquer linha: diz para onde vai ANTES de
+   soltar. Sem isto, o vazio do painel nao era alvo nenhum e o arrastar
+   simplesmente nao acontecia. */
+.exp-solte-aqui {
+  margin: 6px 8px;
+  padding: 10px 12px;
+  border: 2px dashed var(--c-accent);
+  border-radius: 8px;
+  background: var(--c-accent-light);
+  color: var(--c-text);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* Copia em andamento (ver `fs:importar`). Materia inteira leva minutos, e sem
+   esta linha a tela ficava parada entre "soltei" e "acabou". */
+.exp-progresso {
+  padding: 6px 10px;
+}
+.exp-progresso p {
+  margin: 4px 0 0;
+  color: var(--c-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.exp-progresso-barra {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--c-border);
+  overflow: hidden;
+}
+.exp-progresso-barra span {
+  display: block;
+  height: 100%;
+  background: var(--c-accent);
+  transition: width 0.12s linear;
 }
 
 /* Material que está na conta mas ainda não nesta máquina (ver materiais.ts).

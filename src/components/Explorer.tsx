@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { api, mensagemDeErro, parseSelection, type TreeNode } from "../lib/api";
+import {
+  api,
+  mensagemDeErro,
+  parseSelection,
+  type ProgressoImportar,
+  type TreeNode,
+} from "../lib/api";
 import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 import { useConfirm } from "./Confirm";
 import { Chevron, FileIcon, FolderIcon, NuvemIcon } from "./icons";
@@ -62,6 +68,28 @@ function recebeDeFora(rel: string) {
 }
 
 /**
+ * Onde o arquivo cai quando e solto EM CIMA deste no.
+ *
+ * Pasta recebe nela mesma; ARQUIVO manda para a pasta que o contem. Mirar na
+ * linha exata da pasta numa lista densa e a parte mais chata de arrastar, e
+ * soltar em cima de um PDF da materia so pode querer dizer "junto desse PDF".
+ * Antes disso, errar a linha por um item fazia o arrastar evaporar sem aviso.
+ */
+function destinoDe(node: TreeNode) {
+  return node.dir ? node.rel : node.rel.split("/").slice(0, -1).join("/");
+}
+
+/**
+ * Onde cai o que for solto no vazio do painel.
+ *
+ * `Notes/` e a raiz do que aceita arquivo de fora. Nao adivinha INATEL nem
+ * subjects: o destino aparece escrito na faixa antes de soltar, e o recado
+ * repete depois — palpite silencioso aqui seria material do professor
+ * aterrissando na pasta errada.
+ */
+const RAIZ_DE_FORA = "Notes";
+
+/**
  * Esse caminho tem cópia na nuvem?
  *
  * `Notes/INATEL` e `Notes/attachments` são objetos no R2; `Notes/subjects` são
@@ -120,6 +148,21 @@ export function Explorer({
   // de verdade (origem gravavel, destino gravavel, sem sobrescrever) e do
   // main via vault.mover().
   const [dragOverRel, setDragOverRel] = useState<string | null>(null);
+  /** Arrastando de fora, mas longe de qualquer linha: o destino e a raiz. */
+  const [deForaNoFundo, setDeForaNoFundo] = useState(false);
+  /** Copia em andamento — vem do main a cada arquivo (ver `fs:importar`). */
+  const [progresso, setProgresso] = useState<ProgressoImportar | null>(null);
+
+  useEffect(() => api.fs.onImportacao?.(setProgresso), []);
+
+  // O recado some sozinho. Ele e a unica confirmacao de que a copia aconteceu
+  // (com a pasta fechada, nada muda na arvore), mas deixado ali vira legenda
+  // permanente e passa a descrever uma acao que ja saiu da cabeca de quem le.
+  useEffect(() => {
+    if (!recado) return;
+    const id = window.setTimeout(() => setRecado(null), 12_000);
+    return () => window.clearTimeout(id);
+  }, [recado]);
 
   async function guard(fn: () => Promise<unknown>) {
     setErro(null);
@@ -146,12 +189,63 @@ export function Explorer({
       const partes: string[] = [];
       if (copiados) partes.push(tf("{n} arquivo(s) copiado(s) para {destino}", { n: copiados, destino }));
       if (jaExistiam.length) {
-        partes.push(tf("já existia, não sobrescrevi: {nomes}", { nomes: jaExistiam.join(", ") }));
+        // Materia inteira que ja existia devolve uma lista de centenas de
+        // nomes, e uma parede de texto no rodape da arvore nao e resposta.
+        // Tres nomes bastam para reconhecer o que foi pulado.
+        const mostra = jaExistiam.slice(0, 3).join(", ");
+        partes.push(
+          jaExistiam.length > 3
+            ? tf("já existiam, não sobrescrevi: {nomes} e mais {n}", {
+                nomes: mostra,
+                n: jaExistiam.length - 3,
+              })
+            : tf("já existia, não sobrescrevi: {nomes}", { nomes: mostra }),
+        );
       }
       setRecado(partes.join(" · ") || t("Nada a copiar."));
     } catch (e) {
       setErro(mensagemDeErro(e));
+    } finally {
+      // O main manda `null` no fim, mas se ele morrer no meio a linha de
+      // progresso ficaria para sempre — e ela diz "copiando".
+      setProgresso(null);
     }
+  }
+
+  /**
+   * Rola a arvore sozinha quando o cursor encosta na borda durante o arrasto.
+   *
+   * Com a mao segurando o botao do mouse nao ha roda nem barra de rolagem: a
+   * pasta que esta abaixo da area visivel era simplesmente inalcancavel.
+   */
+  function rolarSeNaBorda(e: React.DragEvent) {
+    const caixa = (e.currentTarget as HTMLElement).closest(".scroll") as HTMLElement | null;
+    if (!caixa) return;
+    const r = caixa.getBoundingClientRect();
+    const margem = 36;
+    if (e.clientY < r.top + margem) caixa.scrollTop -= 16;
+    else if (e.clientY > r.bottom - margem) caixa.scrollTop += 16;
+  }
+
+  /** Arrasto de fora passando pelo painel, mas nao por cima de uma linha. */
+  function aoArrastarNoFundo(e: React.DragEvent) {
+    rolarSeNaBorda(e);
+    if (readOnly || !temArquivoDeFora(e)) return;
+    // Uma linha ja tratou: o destino e o dela, e o realce tambem.
+    if ((e.target as HTMLElement).closest(".exp-row")) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    if (dragOverRel !== RAIZ_DE_FORA) setDragOverRel(RAIZ_DE_FORA);
+    if (!deForaNoFundo) setDeForaNoFundo(true);
+  }
+
+  function aoSoltarNoFundo(e: React.DragEvent) {
+    setDeForaNoFundo(false);
+    if (readOnly || !temArquivoDeFora(e)) return;
+    if ((e.target as HTMLElement).closest(".exp-row")) return;
+    e.preventDefault();
+    setDragOverRel(null);
+    void importar(RAIZ_DE_FORA, e.dataTransfer.files);
   }
 
   /**
@@ -356,7 +450,17 @@ export function Explorer({
   const criandoNaRaiz = criando && !nodes.some((n) => contem(n, criando.dir));
 
   return (
-    <div style={{ minHeight: "100%" }} onContextMenu={(e) => menu.open(e, itensDoFundo())}>
+    <div
+      style={{ minHeight: "100%" }}
+      onContextMenu={(e) => menu.open(e, itensDoFundo())}
+      onDragOver={aoArrastarNoFundo}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+        setDeForaNoFundo(false);
+        setDragOverRel(null);
+      }}
+      onDrop={aoSoltarNoFundo}
+    >
       {nodes.length === 0 && !criando ? (
         <p style={{ color: "var(--c-muted)", padding: "8px 10px", fontSize: 12 }}>
           {carregando
@@ -403,6 +507,31 @@ export function Explorer({
             );
           }}
         />
+      )}
+
+      {deForaNoFundo && (
+        <p className="exp-solte-aqui">
+          {tf("Solte para copiar em {destino}/", { destino: RAIZ_DE_FORA })}
+        </p>
+      )}
+
+      {progresso && (
+        <div className="exp-progresso">
+          <div className="exp-progresso-barra">
+            <span
+              style={{
+                width: `${progresso.total ? (progresso.feitos / progresso.total) * 100 : 0}%`,
+              }}
+            />
+          </div>
+          <p>
+            {tf("Copiando {feitos} de {total} — {nome}", {
+              feitos: progresso.feitos,
+              total: progresso.total,
+              nome: progresso.nome,
+            })}
+          </p>
+        </div>
       )}
 
       {erro && (
@@ -470,6 +599,22 @@ function Row({
   const [open, setOpen] = useState(false);
   const criandoAqui = criando?.dir === node.rel;
 
+  /**
+   * Pasta fechada abre sozinha depois de um instante parado em cima dela.
+   *
+   * Sem isto, soltar dentro de `Notes/INATEL/C09-.../extras` exigia lembrar de
+   * abrir a pasta ANTES de comecar a arrastar — com o botao do mouse
+   * pressionado nao ha mais como clicar na seta. Meio segundo e o bastante
+   * para separar "estou passando por cima" de "e aqui que eu quero entrar".
+   */
+  const abrirAoPairar = useRef<number | null>(null);
+  function pararDeAbrir() {
+    if (abrirAoPairar.current === null) return;
+    window.clearTimeout(abrirAoPairar.current);
+    abrirAoPairar.current = null;
+  }
+  useEffect(() => pararDeAbrir, []);
+
   useEffect(() => {
     if (criandoAqui) setOpen(true);
   }, [criandoAqui]);
@@ -500,7 +645,10 @@ function Row({
   // Sem `local()` aqui, ao contrário do mover: uma pasta que só existe no
   // espelho do R2 (nada dela baixado) ainda é o lugar certo para soltar
   // material novo — o main a cria no disco na hora.
-  const podeReceberDeFora = !readOnly && node.dir && recebeDeFora(node.rel);
+  // E não exige que a linha seja pasta: soltar num arquivo cai na pasta dele
+  // (ver `destinoDe`), que é o único destino que aquele gesto pode significar.
+  const destinoDeFora = destinoDe(node);
+  const podeReceberDeFora = !readOnly && recebeDeFora(destinoDeFora);
 
   /**
    * O que a linha diz de si mesma quando o arquivo ainda está na nuvem.
@@ -565,23 +713,38 @@ function Row({
           // "copy" de fora, "move" de dentro: o cursor do Windows passa a
           // dizer a verdade sobre o que vai acontecer com o original.
           e.dataTransfer.dropEffect = deFora ? "copy" : "move";
-          if (dragOverRel !== node.rel) setDragOverRel(node.rel);
+          // O realce vai para a pasta que VAI RECEBER, que nem sempre e a
+          // linha sob o cursor: parado em cima de um PDF, quem acende e a
+          // pasta dele. E o unico jeito de o destino ser visivel antes de
+          // soltar.
+          const alvo = deFora ? destinoDeFora : node.rel;
+          if (dragOverRel !== alvo) setDragOverRel(alvo);
+          if (node.dir && !open && abrirAoPairar.current === null) {
+            abrirAoPairar.current = window.setTimeout(() => {
+              abrirAoPairar.current = null;
+              setOpen(true);
+            }, 600);
+          }
         }}
         onDragLeave={(e) => {
           if (!podeReceberDrop && !podeReceberDeFora) return;
           // relatedTarget dentro do proprio botao e so o cursor passando por
           // cima do icone/texto — nao pode apagar o realce nesse caso.
-          if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverRel(null);
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          pararDeAbrir();
+          setDragOverRel(null);
         }}
         onDrop={(e) => {
           const deFora = temArquivoDeFora(e);
+          pararDeAbrir();
           if (deFora ? !podeReceberDeFora : !podeReceberDrop) return;
           e.preventDefault();
           setDragOverRel(null);
           if (deFora) {
             // Pasta inteira também vem por aqui: o Windows entrega a pasta
-            // como um item só, e o main copia a árvore dela.
-            void importar(node.rel, e.dataTransfer.files);
+            // como um item só, e o main copia a árvore dela — mesclando com a
+            // que já existir, sem sobrescrever arquivo nenhum.
+            void importar(destinoDeFora, e.dataTransfer.files);
             return;
           }
           const origem = e.dataTransfer.getData(DND_MIME);

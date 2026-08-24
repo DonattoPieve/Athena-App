@@ -16,6 +16,27 @@ import "./styles/config.css";
 import "./styles/biblioteca.css";
 import "./styles/primeiro-uso.css";
 
+/**
+ * Arrastar arquivo de fora e solta-lo FORA de um alvo nao pode fazer nada.
+ *
+ * O padrao do navegador para um arquivo solto na pagina e abri-lo como se
+ * fosse um link — a janela do app sai do ar e da lugar ao PDF (ou a uma tela
+ * quebrada, porque `file://` e barrado numa pagina servida por localhost).
+ * A arvore chama `preventDefault` nos seus proprios alvos; isto cobre todo o
+ * resto da janela, que e a maior parte dela.
+ *
+ * `defaultPrevented` e o que separa os dois casos: quando o evento chega aqui
+ * ja cancelado, ele passou por um alvo de verdade (uma pasta da arvore) e o
+ * cursor de copia dele esta certo. Quando chega intacto, `dropEffect = "none"`
+ * poe o cursor de proibido e o `drop` nem chega a acontecer — em vez do
+ * arrastar silenciosamente "funcionar" e nao copiar nada.
+ */
+window.addEventListener("dragover", (e) => {
+  if (!e.defaultPrevented && e.dataTransfer) e.dataTransfer.dropEffect = "none";
+  e.preventDefault();
+});
+window.addEventListener("drop", (e) => e.preventDefault());
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />

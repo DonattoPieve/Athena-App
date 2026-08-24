@@ -84,16 +84,68 @@ await caso("NUNCA sobrescreve material que já existe", async ({ vault, raiz, fo
   );
 });
 
-await caso("pasta de mesmo nome também é recusada inteira", async ({ vault, raiz, fora }) => {
+await caso("pasta de mesmo nome é MESCLADA, arquivo por arquivo", async ({ vault, raiz, fora }) => {
+  // Arrastar a matéria de novo depois que o professor postou mais duas aulas
+  // é o caso normal — e antes disto a pasta inteira era recusada pelo nome,
+  // obrigando a abrir a pasta na árvore e soltar arquivo por arquivo.
   const antigo = path.join(raiz, "Notes", "INATEL", "M08");
   arquivo(antigo, "velho.pdf", "velho");
+  arquivo(antigo, "aula-4.pdf", "material-do-professor");
   const novo = path.join(fora, "M08");
   arquivo(novo, "novo.pdf", "novo");
+  arquivo(novo, "aula-4.pdf", "versao-de-fora");
+  arquivo(path.join(novo, "extras"), "tabela.png", "t");
 
   const r = await vault.importar("Notes/INATEL", [novo]);
-  assert.deepEqual(r.jaExistiam, ["M08"]);
-  assert.equal(fs.existsSync(path.join(antigo, "novo.pdf")), false, "mesclou pastas");
+  assert.equal(r.copiados, 2, `esperava 2 arquivos novos, veio ${r.copiados}`);
+  assert.deepEqual(r.jaExistiam, ["M08/aula-4.pdf"]);
+  assert.equal(fs.readFileSync(path.join(antigo, "novo.pdf"), "utf8"), "novo");
+  assert.equal(fs.readFileSync(path.join(antigo, "extras", "tabela.png"), "utf8"), "t");
+  // O que já estava lá continua intocado: mesclar não pode virar substituir.
+  assert.equal(
+    fs.readFileSync(path.join(antigo, "aula-4.pdf"), "utf8"),
+    "material-do-professor",
+    "o material do professor foi substituído ao mesclar",
+  );
   assert.equal(fs.readFileSync(path.join(antigo, "velho.pdf"), "utf8"), "velho");
+});
+
+await caso("pasta vazia arrastada ainda vira pasta", async ({ vault, raiz, fora }) => {
+  const vazia = path.join(fora, "M10-Sem-Nada");
+  fs.mkdirSync(vazia, { recursive: true });
+  const r = await vault.importar("Notes/INATEL", [vazia]);
+  assert.equal(r.copiados, 0);
+  assert.equal(
+    fs.existsSync(path.join(raiz, "Notes", "INATEL", "M10-Sem-Nada")),
+    true,
+    "a pasta não foi criada",
+  );
+});
+
+await caso("o progresso é contado arquivo a arquivo", async ({ vault, fora }) => {
+  // É o que alimenta a linha "copiando 12 de 340" da árvore. Sem ela, matéria
+  // inteira (centenas de MB) fica indistinguível de app travado.
+  const m = path.join(fora, "M09");
+  for (const n of ["a.pdf", "b.pdf", "c.pdf"]) arquivo(m, n, n);
+
+  const vistos = [];
+  const r = await vault.importar("Notes/INATEL", [m], (p) => vistos.push(p));
+  assert.equal(r.copiados, 3);
+  assert.deepEqual(
+    vistos.map((p) => p.feitos),
+    [1, 2, 3],
+  );
+  // O total sai fechado desde o primeiro aviso: ele vem do plano, montado
+  // antes de a cópia começar.
+  assert.deepEqual(
+    vistos.map((p) => p.total),
+    [3, 3, 3],
+  );
+  assert.equal(
+    vistos.every((p) => p.nome.startsWith("M09/")),
+    true,
+    `nome relativo errado: ${JSON.stringify(vistos.map((p) => p.nome))}`,
+  );
 });
 
 await caso("Resumos/ recusa arquivo de fora", async ({ vault, fora }) => {
