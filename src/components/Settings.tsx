@@ -201,6 +201,16 @@ export function CampoFonteQuebra() {
 const ABAS = ["geral", "editor", "aparencia", "ia", "atalhos", "vault", "sobre"] as const;
 type Aba = (typeof ABAS)[number];
 
+/**
+ * Seção pedida de fora — quem manda é o App (`abrirConfig`).
+ *
+ * O `n` não é enfeite: pedir a MESMA seção de novo precisa valer. Abrir os
+ * atalhos, navegar até Aparência e clicar em "ver atalhos" outra vez manda
+ * `atalhos` pela segunda vez, e sem um valor que muda o efeito não roda.
+ */
+export type PedidoSecao = { aba: SecaoConfig; n: number };
+export type SecaoConfig = Aba;
+
 const NOME_ABA: Record<Aba, string> = {
   geral: t("Geral"),
   editor: t("Editor"),
@@ -220,11 +230,25 @@ const NOME_ABA: Record<Aba, string> = {
 export function Settings({
   vaultPath,
   onTrocouVault,
+  secao,
 }: {
   vaultPath: string;
   onTrocouVault: () => void;
+  /** Seção a mostrar quando a tela é aberta de fora; ver `PedidoSecao`. */
+  secao?: PedidoSecao | null;
 }) {
-  const [aba, setAba] = useState<Aba>("geral");
+  const [aba, setAba] = useState<Aba>(secao?.aba ?? "geral");
+
+  /**
+   * A aba de Configurações continua montada depois de aberta uma vez, com a
+   * seção que a pessoa deixou. Sem isto, "Ver todos os atalhos" reabria a
+   * última seção vista — e o clique parecia não fazer nada.
+   */
+  useEffect(() => {
+    if (secao) setAba(secao.aba);
+    // Só o contador dispara: a seção sozinha nao mudaria em dois pedidos iguais.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secao?.n]);
   const { prefs, salvarPrefs } = usePrefs();
   const [claudeBin, setClaudeBin] = useState("");
   const [autoPull, setAutoPull] = useState(true);

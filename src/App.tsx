@@ -13,7 +13,7 @@ import { MaterialView } from "./components/MaterialView";
 import { ImageView } from "./components/ImageView";
 import { Login } from "./components/Login";
 import { PrimeiroUso } from "./components/PrimeiroUso";
-import { Settings } from "./components/Settings";
+import { Settings, type PedidoSecao, type SecaoConfig } from "./components/Settings";
 import { Profile } from "./components/Profile";
 import { Avatar } from "./components/Avatar";
 import { Glossario } from "./components/Biblioteca";
@@ -124,6 +124,8 @@ export default function App() {
   const [target, setTarget] = useState<Target | null>(null);
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  /** Secao pedida da tela de Configuracoes — ver `abrirConfig`. */
+  const [secaoConfig, setSecaoConfig] = useState<PedidoSecao | null>(null);
   const [fileText, setFileText] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
@@ -330,6 +332,19 @@ export default function App() {
   function abrirFixa(nova: Aba) {
     setAbas((atuais) => (atuais.some((a) => a.id === nova.id) ? atuais : [...atuais, nova]));
     setAtiva(nova.id);
+  }
+
+  /**
+   * Abre Configuracoes — opcionalmente numa secao especifica.
+   *
+   * Sem a secao, a aba reabre onde a pessoa parou, que e o certo para a
+   * engrenagem. Com ela, quem clicou pediu um assunto ("ver todos os
+   * atalhos") e tem que cair nele: a aba fica montada, entao mandar so
+   * `abrirFixa` mostrava a ultima secao aberta.
+   */
+  function abrirConfig(secao?: SecaoConfig) {
+    if (secao) setSecaoConfig((antes) => ({ aba: secao, n: (antes?.n ?? 0) + 1 }));
+    abrirFixa(ABA_CONFIG);
   }
 
   function fechar(id: string) {
@@ -838,7 +853,11 @@ export default function App() {
             )}
 
             {a.tipo === "config" && (
-              <Settings vaultPath={vaultPath} onTrocouVault={() => window.location.reload()} />
+              <Settings
+                vaultPath={vaultPath}
+                secao={secaoConfig}
+                onTrocouVault={() => window.location.reload()}
+              />
             )}
 
             {a.tipo === "perfil" && (
@@ -918,10 +937,10 @@ export default function App() {
       <TaskCenter
         versao={versao}
         onAbrirMonitor={() => setAbrirMonitor((n) => n + 1)}
-        onVerAtalhos={() => abrirFixa(ABA_CONFIG)}
+        onVerAtalhos={() => abrirConfig("atalhos")}
         onTema={alternarTema}
         onPerfil={() => abrirFixa(ABA_PERFIL)}
-        onConfig={() => abrirFixa(ABA_CONFIG)}
+        onConfig={() => abrirConfig()}
       />
     </div>
   );
