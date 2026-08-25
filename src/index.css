@@ -92,6 +92,40 @@ body,
   margin: 0;
 }
 
+/**
+ * A barra de rolagem é do Athena, não do Chromium.
+ *
+ * `scrollbar-width` e `scrollbar-color` são propriedades HERDADAS: declaradas
+ * aqui, valem para todo painel que rola — árvore, transcript, leitura, barra
+ * de abas — sem precisar caçar cada um. Sem isto o Chromium desenha a barra
+ * clara e grossa do sistema, e num app escuro ela vira a coisa mais visível
+ * da tela (foi o que aconteceu com a barra de abas).
+ *
+ * Trilho transparente de propósito: barra de rolagem é orientação, não
+ * moldura — ela some no fundo até você precisar dela.
+ */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-border) transparent;
+}
+
+/* Chromium ignora estas regras quando as duas de cima valem; ficam para o dia
+   em que o app rodar num motor que só entende o padrão antigo. */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--c-border);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--c-muted);
+}
+
 body {
   background-color: var(--c-bg);
   background-image: radial-gradient(var(--dots) 1px, transparent 1px);
@@ -859,11 +893,7 @@ body {
   border-bottom: 1px solid var(--c-border);
   background: var(--c-bg);
   overflow-x: auto;
-  scrollbar-width: none;
   flex: 0 0 auto;
-}
-.tabs::-webkit-scrollbar {
-  height: 0;
 }
 .tab {
   display: flex;
@@ -985,10 +1015,10 @@ pre.term {
   overflow-wrap: anywhere;
 }
 
+/* A barra em si vem herdada do `html` (ver o topo do arquivo) — aqui só o
+   "isto rola". */
 .scroll {
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--c-border) transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2002,11 +2032,7 @@ button.leitura-material:hover {
 
 /* A barra de abas cresce sem limite (uma aba por arquivo aberto). Sem isto
    ela empurra a lupa para fora da janela — foi o que aconteceu com 8 abas. */
-.tabs {
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-.tabs::-webkit-scrollbar { height: 6px; }
+.tabs { overflow-x: auto; }
 .tab { flex: 0 0 auto; }
 /* A lupa não rola junto: ela é o aviso de que o Claude parou para perguntar. */
 .tabs > div:last-child { position: sticky; right: 0; background: var(--c-bg); }
