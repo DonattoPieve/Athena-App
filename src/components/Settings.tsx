@@ -217,7 +217,7 @@ const NOME_ABA: Record<Aba, string> = {
   aparencia: t("Aparência"),
   ia: t("IA & Claude"),
   atalhos: t("Atalhos"),
-  vault: t("Vault & Dados"),
+  vault: t("Seus arquivos"),
   sobre: t("Sobre"),
 };
 
@@ -256,6 +256,7 @@ export function Settings({
   /** null = ainda lendo o arquivo do Claude Code. */
   const [claude, setClaude] = useState<ClaudeConta | null>(null);
   const [exportando, setExportando] = useState(false);
+  const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState<string | null>(null);
 
@@ -277,6 +278,39 @@ export function Settings({
       setSalvo(oque);
     } catch (e) {
       setErro(mensagemDeErro(e));
+    }
+  }
+
+  /**
+   * Traz da conta o que falta no disco — o `athena pull`, sem terminal.
+   *
+   * Existe aqui porque a pasta deixou de ser assunto de quem usa: se ela for
+   * apagada, se um arquivo sumir, ou se a pessoa trocar de PC, a resposta tem
+   * que caber num botão. Não sobrescreve nada: o que já existe com conteúdo
+   * diferente é listado como conflito e fica intocado (ver bootstrap.ts).
+   */
+  async function baixarDeNovo() {
+    setErro(null);
+    setSalvo(null);
+    setBaixando(true);
+    try {
+      const r = await vaultApi.baixarTudo();
+      const partes = [
+        tf("{criados} arquivo(s) criado(s), {iguais} já igual(is).", {
+          criados: r.criados,
+          iguais: r.iguais,
+        }),
+      ];
+      if (r.conflitos.length) {
+        partes.push(
+          tf("{n} já existiam diferentes e não foram tocados.", { n: r.conflitos.length }),
+        );
+      }
+      setSalvo(partes.join(" "));
+    } catch (e) {
+      setErro(mensagemDeErro(e));
+    } finally {
+      setBaixando(false);
     }
   }
 
@@ -541,13 +575,34 @@ export function Settings({
           </div>
         )}
 
+        {/*
+          A pasta deixou de ser uma decisão de quem usa o app (ver
+          PrimeiroUso.tsx): ela nasce sozinha dentro dos dados do Athena. Esta
+          aba é a porta que resta para ela — quem quiser ver, mover ou
+          recuperar entra por aqui, e quem não quiser nunca precisa saber que
+          ela existe. Esconder não é trancar: o conteúdo é dele.
+        */}
         {aba === "vault" && (
           <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <strong style={{ fontSize: 13 }}>Vault</strong>
+            <strong style={{ fontSize: 13 }}>{t("Onde ficam seus arquivos")}</strong>
             <p style={{ margin: 0, fontSize: 11.5, color: "var(--c-muted)" }}>
               <code>{vaultPath}</code>
             </p>
-            <div style={{ display: "flex", gap: 8 }}>
+            <p style={{ margin: 0, fontSize: 11.5, color: "var(--c-muted)" }}>
+              {t(
+                "O app cuida desta pasta sozinho. Suas anotações e seus resumos também ficam na sua conta — é de lá que eles voltam num PC novo, ou se esta pasta se perder.",
+              )}
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn" onClick={() => void api.fs.reveal("")}>
+                {t("Abrir no Explorer")}
+              </button>
+              <button className="btn" disabled={baixando} onClick={baixarDeNovo}>
+                {baixando ? t("baixando…") : t("Baixar da conta o que falta")}
+              </button>
+              <button className="btn" disabled={exportando} onClick={exportarTudo}>
+                {exportando ? t("exportando…") : t("Exportar tudo")}
+              </button>
               <button
                 className="btn"
                 title={t("A conta vem de dentro do vault — trocar de pasta pode trocar de conta")}
@@ -558,13 +613,10 @@ export function Settings({
                     // perdia as abas — por um clique em "Cancelar".
                     const { path } = await api.vault.pick();
                     if (path) onTrocouVault();
-                  }, t("vault trocado"))
+                  }, t("pasta trocada"))
                 }
               >
-                {t("Trocar pasta do vault")}
-              </button>
-              <button className="btn" disabled={exportando} onClick={exportarTudo}>
-                {exportando ? t("exportando…") : t("Exportar tudo")}
+                {t("Usar outra pasta")}
               </button>
             </div>
           </section>

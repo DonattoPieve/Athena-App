@@ -307,7 +307,7 @@ function Atividade() {
   }, []);
 
   if (dados === null) {
-    return <p style={{ margin: 0, fontSize: 12, color: "var(--c-muted)" }}>{t("Lendo o vault…")}</p>;
+    return <p style={{ margin: 0, fontSize: 12, color: "var(--c-muted)" }}>{t("Lendo seus arquivos…")}</p>;
   }
 
   if (dados.eventos.length === 0) {

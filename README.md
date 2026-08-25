@@ -81,6 +81,27 @@ electron/
 `contextIsolation: true`, `nodeIntegration: false`. O renderer não tem `fs` nem
 `child_process` — tudo passa pelo main.
 
+### A pasta é cache, não é a fonte
+
+Quem instala o app **nunca escolhe pasta**. Entrar na conta basta: o
+`vault:criarInterno` cria a pasta dentro dos dados do app
+(`%APPDATA%\athena-app\vaults\<conta>`), o `baixarTudo` puxa o TEXTO da conta
+(rascunhos de `Notes/subjects` e páginas de `Resumos/`), e o material do
+professor nem desce — aparece na árvore com ícone de nuvem e vem no primeiro
+clique. "Já tenho uma pasta" e "criar numa pasta minha" existem atrás de
+"outras opções", para quem tem o vault antigo no disco.
+
+Isso só é possível porque **a fonte é o Supabase (texto) + R2 (binário)**, e a
+pasta é uma cópia de trabalho que o app sabe refazer. Daí o resto seguir:
+"vault" sumiu do vocabulário da interface (virou "seus arquivos"), e
+Configurações → **Seus arquivos** é a única porta para a pasta — onde ela está,
+abrir no Explorer, baixar da conta o que falta, exportar tudo, usar outra
+pasta. Esconder não é trancar.
+
+O que continua exigindo arquivo de verdade: o ingest. O motor é um agente de
+terminal que roda com `cwd` na raiz do vault e abre o PDF do professor pelo
+caminho — sem pasta não há ingest.
+
 ### Guardas de escrita
 
 As invariantes do `CLAUDE.md` são código, não promessa:

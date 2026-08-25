@@ -768,7 +768,7 @@ export default function App() {
         {contaAtual.offline && (
           <div className="card alerta-conta" style={{ boxShadow: "inset 3px 0 0 var(--c-muted)" }}>
             <strong>{t("Sem conexão — publicar e puxar estão bloqueados.")}</strong>
-            <p style={{ marginBottom: 0 }}>{t("O resto funciona: o vault é este disco.")}</p>
+            <p style={{ marginBottom: 0 }}>{t("O resto funciona: seus arquivos são os deste computador.")}</p>
           </div>
         )}
 
@@ -786,7 +786,7 @@ export default function App() {
                   setConta({ ...contaAtual, contaAnterior: undefined });
                 }}
               >
-                {t("Entendi, este vault é desta conta")}
+                {t("Entendi, estes arquivos são desta conta")}
               </button>
               <button
                 className="btn"

@@ -6,13 +6,15 @@ import { t, tf } from "../lib/i18n";
  * Tela de primeiro uso — o que exigia terminal (clonar o repo, `npm i` dentro
  * de `athena-web`, `athena login`, `athena pull`) vira um botão.
  *
- * Ela aparece DEPOIS do login, quando a conta ainda não tem vault neste PC.
- * Não pede login (já houve) e, no caminho principal, não pede pasta: o vault
- * nasce dentro dos dados do app (`vault:criarInterno`), e é por isso que uma
- * conta não enxerga os arquivos da outra.
+ * **Um caminho só, e ele não pergunta nada.** Entrar na conta basta: o app
+ * cria a pasta dentro dos próprios dados (`vault:criarInterno`) e puxa o texto
+ * da conta — rascunhos e resumos. O material do professor nem desce agora,
+ * aparece na árvore com ícone de nuvem e vem no primeiro clique.
  *
- * "Já tenho um vault" e "escolher a pasta" continuam existindo para quem tem
- * o vault antigo no disco — só deixaram de ser o caminho normal.
+ * Escolher pasta e apontar para um vault que já existe continuam possíveis,
+ * atrás de "outras opções": quem precisa disso tem o vault antigo no disco e
+ * sabe o que está procurando. Para todo mundo, onde a pasta fica é assunto do
+ * app — e existe uma porta para ela em Configurações → Seus arquivos.
  *
  * Cada passo é um estado só, porque a pessoa só tem uma chance de ver esta
  * tela sem saber o que esperar.
@@ -36,6 +38,8 @@ export function PrimeiroUso({
   erro?: string | null;
 }) {
   const [passo, setPasso] = useState<Passo>({ tipo: "escolha" });
+  /** As saídas de emergência ficam fechadas: elas confundem quem não precisa. */
+  const [avancado, setAvancado] = useState(false);
 
   /** Linhas do download em andamento — a ref evita fechar sobre estado velho no listener do IPC. */
   const linhasRef = useRef<string[]>([]);
@@ -96,8 +100,8 @@ export function PrimeiroUso({
           <h1 className="pu-titulo">Athena</h1>
           <p className="pu-sub">
             {passo.tipo === "criando"
-              ? t("Criando a estrutura do vault…")
-              : t("Baixando matérias, páginas e notas do banco…")}
+              ? t("Preparando seus arquivos…")
+              : t("Baixando suas matérias, resumos e anotações…")}
           </p>
           <div className="pu-log">
             {linhas.length === 0 ? (
@@ -121,7 +125,7 @@ export function PrimeiroUso({
       <div className="pu-tela">
         <div className="card pu-caixa">
           <h1 className="pu-titulo">Athena</h1>
-          <p className="pu-sub">{t("Vault pronto.")}</p>
+          <p className="pu-sub">{t("Tudo pronto.")}</p>
           <p className="pu-resumo">
             {tf("{criados} arquivo(s) criado(s), {iguais} já igual(is).", {
               criados: r.criados,
@@ -153,7 +157,7 @@ export function PrimeiroUso({
             </p>
           )}
           <button className="btn btn-primary" onClick={() => onVaultPronto(passo.pasta)}>
-            {t("Abrir o vault")}
+            {t("Abrir o Athena")}
           </button>
         </div>
       </div>
@@ -179,24 +183,43 @@ export function PrimeiroUso({
     <div className="pu-tela">
       <div className="card pu-caixa">
         <h1 className="pu-titulo">Athena</h1>
-        <p className="pu-sub">{t("Esta conta ainda não tem vault neste computador.")}</p>
+        <p className="pu-sub">
+          {t("Falta preparar seus arquivos neste computador. É um clique.")}
+        </p>
         <div className="pu-opcoes">
           <button className="btn btn-primary" onClick={() => void comecar()}>
             <span className="pu-opcao-titulo">{t("Começar")}</span>
             <span className="pu-opcao-desc">
-              {t("O app cria a pasta e baixa tudo da sua conta. Você não precisa saber onde ela fica.")}
-            </span>
-          </button>
-          <button className="btn" onClick={() => void onEscolherVaultExistente()}>
-            <span className="pu-opcao-titulo">{t("Já tenho um vault neste PC")}</span>
-            <span className="pu-opcao-desc">
-              {t("Escolher a pasta que já tem")} <code>CLAUDE.md</code> {t("e")} <code>Notes/</code>
+              {t(
+                "Baixa suas anotações e seus resumos da conta. O material do professor vem quando você abrir cada aula.",
+              )}
             </span>
           </button>
         </div>
-        <button className="link-btn" onClick={() => void escolherPastaNova()}>
-          {t("prefiro escolher a pasta eu mesmo")}
-        </button>
+
+        {/* Fechadas por padrão: são para quem já tem o vault antigo no disco e
+            foi atrás disto — oferecer as três lado a lado transformava um
+            clique numa decisão que ninguém tem como tomar no primeiro uso. */}
+        {avancado ? (
+          <div className="pu-opcoes">
+            <button className="btn" onClick={() => void onEscolherVaultExistente()}>
+              <span className="pu-opcao-titulo">{t("Já tenho uma pasta do Athena neste PC")}</span>
+              <span className="pu-opcao-desc">
+                {t("Escolher a pasta que já tem")} <code>CLAUDE.md</code> {t("e")} <code>Notes/</code>
+              </span>
+            </button>
+            <button className="btn" onClick={() => void escolherPastaNova()}>
+              <span className="pu-opcao-titulo">{t("Criar numa pasta minha")}</span>
+              <span className="pu-opcao-desc">
+                {t("Você escolhe onde; o resto é igual. Só funciona em pasta vazia.")}
+              </span>
+            </button>
+          </div>
+        ) : (
+          <button className="link-btn" onClick={() => setAvancado(true)}>
+            {t("outras opções")}
+          </button>
+        )}
         {erro && <p className="pu-erro">{erro}</p>}
       </div>
     </div>

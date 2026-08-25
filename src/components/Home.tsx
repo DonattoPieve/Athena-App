@@ -110,7 +110,7 @@ export function Home({
   if (!dados) {
     return (
       <div className="card" style={{ padding: 24 }}>
-        <p style={{ margin: 0, color: "var(--c-muted)" }}>{t("Lendo o vault…")}</p>
+        <p style={{ margin: 0, color: "var(--c-muted)" }}>{t("Lendo seus arquivos…")}</p>
       </div>
     );
   }
@@ -361,7 +361,7 @@ export function Home({
       <div className="duas-colunas">
         <div className="card" style={{ padding: 16 }}>
           <p className="label" style={{ margin: "0 0 10px" }}>
-            {t("Seu vault")}
+            {t("Seu conteúdo")}
           </p>
           <div className="home-vault-linha">
             <p className="home-vault-titulo">
