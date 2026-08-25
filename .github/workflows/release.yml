@@ -30,9 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Node 22, e nao 20: o `jsdom` pede `^22.22.2 || ^24.15.0 || >=26` e o
+      # `undici` que vem com ele pede `>=22.19`. O `npm ci` so avisa sobre
+      # engines, entao no Node 20 a instalacao passava e o `test:md` quebrava
+      # depois, dentro do jsdom, com "webidl.util.markAsUncloneable is not a
+      # function" — um erro que nao diz em lugar nenhum que o problema e a
+      # versao do Node. A maquina do Donatto ja roda 22.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: A tag combina com o package.json?
