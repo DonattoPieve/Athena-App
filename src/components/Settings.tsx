@@ -635,6 +635,12 @@ export function Settings({
             {/* "1.0.0" espelha VERSAO em App.tsx (não exportada de lá; App.tsx
                 não está na minha lista de arquivos para eu importar dali). */}
             <span className="cfg-sobre-versao">{tf("Versão {v}", { v: "1.0.0" })}</span>
+            {/* Segunda porta para o passo a passo — a primeira e o "?" no
+                rodape do painel da direita. Quem esta perdido procura em
+                Configuracoes antes de procurar um icone. */}
+            <button className="btn" style={{ marginTop: 12 }} onClick={() => void api.win.ajuda()}>
+              {t("Como usar o Athena")}
+            </button>
           </div>
         )}
       </div>

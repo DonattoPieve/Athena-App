@@ -15,6 +15,7 @@ import "./styles/comandos.css";
 import "./styles/config.css";
 import "./styles/biblioteca.css";
 import "./styles/primeiro-uso.css";
+import "./styles/ajuda.css";
 
 /**
  * Arrastar arquivo de fora e solta-lo FORA de um alvo nao pode fazer nada.

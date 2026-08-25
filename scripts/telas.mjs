@@ -123,10 +123,10 @@ await pagina.addInitScript(`
         titulo: "Introducao a Microcontroladores", materia: "Microcontroladores", geradaEm: "2026-08-14T10:00:00Z" }]),
     },
     win: { close: async () => true, minimize: async () => true, toggleMaximize: async () => true,
-            isMaximized: async () => false, onMaximized: nada },
+            isMaximized: async () => false, onMaximized: nada, ajuda: async () => true },
     fs: {
       tree: async () => arvore, subjects: vazio, describe: async () => null, lessons: vazio,
-      materialDaPagina: async () => null,
+      materialDaPagina: async () => null, onApagado: nada,
       read: async () => ${JSON.stringify(PAGINA)},
       write: async () => {}, slug: async (s) => s, reveal: async () => {}, mkdir: async () => {},
       create: async () => {}, rename: async (r) => r, trash: async () => true,

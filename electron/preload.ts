@@ -51,6 +51,7 @@ const api = {
     revisao: () => ipcRenderer.invoke("usage:revisao"),
   },
   win: {
+    ajuda: () => ipcRenderer.invoke("win:ajuda"),
     close: () => ipcRenderer.invoke("win:close"),
     minimize: () => ipcRenderer.invoke("win:minimize"),
     toggleMaximize: () => ipcRenderer.invoke("win:toggleMaximize"),
@@ -105,6 +106,12 @@ const api = {
       }
     },
     trash: (rel: string, naNuvem = false) => ipcRenderer.invoke("fs:trash", rel, naNuvem),
+    /** Caminho que foi para a lixeira — a janela fecha as abas dele. */
+    onApagado: (cb: (rel: string) => void) => {
+      const handler = (_: unknown, rel: string) => cb(rel);
+      ipcRenderer.on("fs:apagado", handler);
+      return () => ipcRenderer.removeListener("fs:apagado", handler);
+    },
     openExternal: (rel: string) => ipcRenderer.invoke("fs:openExternal", rel),
     pasteImage: (base: string, ext: string, data: Uint8Array) =>
       ipcRenderer.invoke("fs:pasteImage", base, ext, data),

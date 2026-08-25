@@ -195,6 +195,8 @@ type AthenaBridge = {
   };
   /** A moldura da janela e desenhada pelo app — ver TitleBar.tsx. */
   win: {
+    /** Abre o passo a passo numa janela propria, menor. */
+    ajuda(): Promise<boolean>;
     close(): Promise<boolean>;
     minimize(): Promise<boolean>;
     /** Devolve o estado NOVO: true = maximizada. */
@@ -241,6 +243,8 @@ type AthenaBridge = {
      * banco — e aí não volta em máquina nenhuma. Devolve o que saiu da nuvem.
      */
     trash(rel: string, naNuvem?: boolean): Promise<{ r2: number; banco: number }>;
+    /** Avisa que um caminho foi para a lixeira (pasta inclusive). */
+    onApagado(cb: (rel: string) => void): () => void;
     openExternal(rel: string): Promise<boolean>;
     pasteImage(base: string, ext: string, data: Uint8Array): Promise<string>;
     lessons(): Promise<{ slug: string; subject: string }[]>;

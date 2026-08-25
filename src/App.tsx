@@ -14,6 +14,7 @@ import { ImageView } from "./components/ImageView";
 import { Login } from "./components/Login";
 import { PrimeiroUso } from "./components/PrimeiroUso";
 import { Settings, type PedidoSecao, type SecaoConfig } from "./components/Settings";
+import { Ajuda } from "./components/Ajuda";
 import { Profile } from "./components/Profile";
 import { Avatar } from "./components/Avatar";
 import { Glossario } from "./components/Biblioteca";
@@ -62,6 +63,8 @@ type Aba =
   | { id: "nova-nota"; tipo: "nova-nota" }
   | { id: "glossario"; tipo: "glossario" }
   | { id: "conteudo"; tipo: "conteudo" }
+  /** Passo a passo — mora numa janela propria, aberta por `win:ajuda`. */
+  | { id: "ajuda"; tipo: "ajuda" }
   | { id: string; tipo: "arquivo"; rel: string };
 
 const ABA_HOME: Aba = { id: "home", tipo: "home" };
@@ -75,6 +78,7 @@ const ROTULO: Record<string, string> = {
   home: t("Home"),
   comandos: t("Comandos"),
   config: t("Configurações"),
+  ajuda: t("Como usar o Athena"),
   perfil: t("Perfil"),
   "nova-nota": t("Nova nota"),
   glossario: t("Glossário"),
@@ -346,6 +350,37 @@ export default function App() {
     if (secao) setSecaoConfig((antes) => ({ aba: secao, n: (antes?.n ?? 0) + 1 }));
     abrirFixa(ABA_CONFIG);
   }
+
+  /**
+   * Fecha as abas de um caminho que foi para a lixeira.
+   *
+   * Pasta apagada leva junto as abas do que estava dentro dela (`rel + "/"`).
+   * Sem isto sobrava uma aba mostrando um arquivo que nao existe mais — e, no
+   * editor, salvar dali RECRIAVA o arquivo que a pessoa acabou de apagar.
+   *
+   * Vem por evento do main, e nao do Explorer, porque a aba pode estar em
+   * outra janela: quem apaga e uma, quem tem o arquivo aberto pode ser outra.
+   */
+  useEffect(
+    () =>
+      api.fs.onApagado?.((rel) => {
+        setAbas((atuais) => {
+          const some = (a: Aba) =>
+            a.tipo === "arquivo" && (a.rel === rel || a.rel.startsWith(rel + "/"));
+          if (!atuais.some(some)) return atuais;
+          const restantes = atuais.filter((a) => !some(a));
+          if (restantes.length === 0) {
+            if (destacada) void api.win.close();
+            return destacada ? atuais : [ABA_HOME];
+          }
+          setAtiva((abaAtiva) =>
+            restantes.some((a) => a.id === abaAtiva) ? abaAtiva : restantes[restantes.length - 1].id,
+          );
+          return restantes;
+        });
+      }),
+    [destacada],
+  );
 
   function fechar(id: string) {
     // A home e o chao da casa — mas so na janela principal. Numa janela
@@ -864,6 +899,7 @@ export default function App() {
               <Profile conta={contaAtual} onSaiu={() => setConta(false)} onConta={setConta} />
             )}
 
+            {a.tipo === "ajuda" && <Ajuda />}
             {a.tipo === "glossario" && <Glossario onAbrir={abrir} />}
             {a.tipo === "conteudo" && <MeuConteudo onAbrir={abrir} />}
             {a.tipo === "arquivo" && <Arquivo rel={a.rel} />}
@@ -907,6 +943,26 @@ export default function App() {
     else if (d === "perfil") abrirFixa(ABA_PERFIL);
   }
 
+  /**
+   * A janela da ajuda nao monta o app inteiro.
+   *
+   * Uma janela destacada normal traz a lateral, o explorer e o transcript —
+   * numa janela de 900px isso deixaria uns 380px para o texto, e nenhum dos
+   * tres serve para ler um passo a passo. Aqui e so a faixa de arrastar (a
+   * janela e `frame: false`: sem ela nao ha como mover nem fechar) e o texto.
+   */
+  if (destacada?.tipo === "ajuda") {
+    return (
+      <div className="ajuda-janela">
+        <div className="ajuda-barra">
+          <span>{t("Como usar o Athena")}</span>
+          <ControlesJanela />
+        </div>
+        <Ajuda />
+      </div>
+    );
+  }
+
   return (
     <div
       className="shell"
@@ -938,6 +994,7 @@ export default function App() {
         versao={versao}
         onAbrirMonitor={() => setAbrirMonitor((n) => n + 1)}
         onVerAtalhos={() => abrirConfig("atalhos")}
+        onAjuda={() => void api.win.ajuda()}
         onTema={alternarTema}
         onPerfil={() => abrirFixa(ABA_PERFIL)}
         onConfig={() => abrirConfig()}

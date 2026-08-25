@@ -36,6 +36,7 @@ function alvoLegivel(rotulo: string | null): string | null {
 export function TaskCenter({
   onAbrirMonitor,
   onVerAtalhos,
+  onAjuda,
   onTema,
   onPerfil,
   onConfig,
@@ -43,6 +44,8 @@ export function TaskCenter({
 }: {
   onAbrirMonitor: () => void;
   onVerAtalhos: () => void;
+  /** Abre o passo a passo numa janela propria (ver `win:ajuda` no main). */
+  onAjuda: () => void;
   onTema: () => void;
   onPerfil: () => void;
   onConfig: () => void;
@@ -221,6 +224,15 @@ export function TaskCenter({
           <button title={t("Alternar tema")} aria-label={t("Alternar tema")} onClick={onTema}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
               <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          {/* O "?" vem antes dos outros: quem precisa dele e quem ainda nao
+              sabe onde ficam os outros. */}
+          <button title={t("Como usar o Athena")} aria-label={t("Como usar o Athena")} onClick={onAjuda}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.2 9.3a2.8 2.8 0 1 1 3.4 2.7c-.7.2-1 .8-1 1.5v.4" strokeLinecap="round" />
+              <path d="M12 17.2v.2" strokeLinecap="round" />
             </svg>
           </button>
           <button title={t("Perfil")} aria-label={t("Perfil")} onClick={onPerfil}>

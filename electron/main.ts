@@ -634,6 +634,10 @@ function registerIpc() {
     // exatamente tirar da nuvem, e nao ha o que mandar para a lixeira.
     if (fs.existsSync(alvo)) await shell.trashItem(alvo);
     send("vault:changed", null);
+    // Aba aberta de um arquivo que acabou de ir para a lixeira mostra conteudo
+    // que nao existe mais, e salvar dali recriaria o arquivo apagado. Vai para
+    // TODAS as janelas de proposito: a aba pode ter sido arrancada para outra.
+    send("fs:apagado", rel);
     return apagados;
   });
   ipcMain.handle("fs:openExternal", async (_e, rel: string) => {
@@ -859,6 +863,37 @@ function registerIpc() {
     return true;
   });
 
+  /**
+   * O passo a passo, numa janela propria e menor.
+   *
+   * Janela, e nao aba: quem esta aprendendo precisa LER e FAZER ao mesmo
+   * tempo, e uma aba obriga a trocar de tela a cada passo. Se ja houver uma
+   * aberta, ela vem para a frente em vez de nascer uma segunda.
+   */
+  ipcMain.handle("win:ajuda", () => {
+    // Compara o hash DECODIFICADO: em producao a janela nasce por `loadFile`
+    // com a opcao `hash`, e o Electron pode reescrever a codificacao pelo
+    // caminho — procurar o texto cru abriria uma segunda janela a cada clique.
+    const aberta = BrowserWindow.getAllWindows().find((w) => {
+      try {
+        return decodeURIComponent(w.webContents.getURL()).includes('"tipo":"ajuda"');
+      } catch {
+        return false;
+      }
+    });
+    if (aberta) {
+      if (aberta.isMinimized()) aberta.restore();
+      aberta.focus();
+      return true;
+    }
+    criarJanela("#aba=" + encodeURIComponent(JSON.stringify({ id: "ajuda", tipo: "ajuda" })), {
+      largura: 900,
+      altura: 720,
+      minimo: 520,
+    });
+    return true;
+  });
+
   /** Versao do `package.json`, via Electron — uma fonte so, sem copia na UI. */
   ipcMain.handle("app:versao", () => app.getVersion());
 
@@ -945,11 +980,17 @@ function iconePath() {
  * lendo o hash. Assim nao existe "janela de segunda classe": destacada ou nao,
  * o app inteiro esta ali.
  */
-function criarJanela(hash = ""): BrowserWindow {
+/**
+ * `tamanho` existe para a janela de ajuda: 1280x820 e a medida de uma janela
+ * de TRABALHO (lateral, conteudo, transcript). Um passo a passo nesse tamanho
+ * vira uma coluna de texto perdida no meio do vazio, e ainda cobre o app que
+ * a pessoa esta tentando aprender a usar.
+ */
+function criarJanela(hash = "", tamanho?: { largura: number; altura: number; minimo: number }): BrowserWindow {
   const janela = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 940,
+    width: tamanho?.largura ?? 1280,
+    height: tamanho?.altura ?? 820,
+    minWidth: tamanho?.minimo ?? 940,
     icon: iconePath(),
     // File/Edit/View/Window/Help e o menu que o Electron poe sozinho: nada ali
     // e do Athena. Sai da janela e some do Alt.

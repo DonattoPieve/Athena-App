@@ -219,6 +219,13 @@ itens dependem do estado do vault e do tema: nova nota, nova pasta, renomear
 (`F2`, com o nome pré-selecionado sem a extensão), copiar caminho, revelar no
 Explorer do Windows, abrir material no programa padrão e apagar.
 
+**Apagar fecha a aba do arquivo.** O `fs:trash` avisa TODAS as janelas
+(`fs:apagado`), e cada uma fecha as abas daquele caminho — pasta apagada leva
+junto as abas do que estava dentro dela. Sem isso sobrava uma aba mostrando um
+arquivo que não existe mais, e salvar dali **recriava** o que a pessoa acabou de
+apagar. Vai por evento do main, e não pelo Explorer, porque a aba pode estar em
+outra janela.
+
 **Apagar vai para a lixeira do Windows**, não `unlink`: com o conteúdo fora do
 git, `Notes/` é a única cópia local do seu texto. A confirmação é o modal do app
 (`Confirm.tsx`), não o `confirm()` do navegador — a janela nativa vinha com o
@@ -253,6 +260,19 @@ Matéria inteira leva minutos, então o main manda o progresso por evento
 340" com barra. O recado do fim ("12 arquivo(s) copiado(s)…") some sozinho em
 12 s: com a pasta fechada ele é a única confirmação visível, mas parado ali
 vira legenda permanente.
+
+### Ajuda (janela própria)
+
+`win:ajuda` abre o passo a passo (`Ajuda.tsx`) numa janela de 900x720 — menor
+que a de trabalho de propósito: é uma coluna de texto, não um painel de três
+colunas. Ela não monta o app inteiro; quando a aba destacada é `ajuda`, o
+`App.tsx` devolve só a faixa de arrastar (a janela é `frame: false`) e o texto.
+Clicar de novo traz a janela existente para a frente em vez de abrir a segunda.
+Duas portas: o "?" no rodapé do painel da direita e Configurações → Sobre.
+
+O texto está em pt-BR direto, sem `t()` — o arquivo é quase todo prosa, e
+quarenta chamadas de tradução tornariam ilegível justamente o que mais precisa
+ser relido.
 
 ### Visualizador de material
 
