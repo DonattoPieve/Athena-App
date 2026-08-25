@@ -10,6 +10,9 @@ import { ContextMenu, useContextMenu, type MenuItem } from "./ContextMenu";
 import { useConfirm } from "./Confirm";
 import { Chevron, FileIcon, FolderIcon, NuvemIcon } from "./icons";
 import { t, tf } from "../lib/i18n";
+// As tres guardas vivem em `lib/guardas.ts` e sao conferidas contra o
+// vault.ts por `scripts/guardas.test.mjs` — ver o cabecalho de la.
+import { apagavel, gravavel, recebeDeFora } from "../lib/guardas";
 
 const EDITAVEIS = /\.(md|txt)$/i;
 const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
@@ -17,54 +20,16 @@ const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
 /** MIME custom do drag-and-drop de mover — so a arvore le, nao precisa ser padrao. */
 const DND_MIME = "application/x-athena-rel";
 
-/** Espelha as guardas do vault.ts — o menu nao oferece o que o main recusaria. */
-const GRAVAVEIS = [
-  "Notes/subjects",
-  "Notes/concepts",
-  "Notes/games",
-  "Notes/studies",
-  "Notes/attachments",
-];
-function gravavel(rel: string) {
-  return GRAVAVEIS.some((p) => rel === p || rel.startsWith(p + "/"));
-}
-
-/**
- * Apagar vale numa área maior que escrever — ver `isDeletable` no vault.ts.
- *
- * `Resumos/` é somente leitura porque quem escreve lá é o ingest. Mas tirar do
- * disco uma página que não deveria estar lá é legítimo, e sem isto a única
- * saída era abrir o Explorer do Windows por fora do app.
- */
-function apagavel(rel: string) {
-  // Espelha `isDeletable` do vault.ts, que abriu para `Notes/` inteiro. Ficou
-  // preso em `gravavel` (que exclui Notes/INATEL) quando a regra do main
-  // mudou, e o resultado foi o pior tipo de defeito: o item do menu aparecia,
-  // cinza, sem dizer por que — o app podia apagar e a tela dizia que nao.
-  return recebeDeFora(rel) || rel === "Resumos" || rel.startsWith("Resumos/");
-}
-
 /**
  * Nó que só existe no bucket ainda não tem arquivo nesta máquina.
  *
  * Renomear, mover ou apagar um deles falharia no main com "não encontrado" —
  * pior, pareceria bug do app. Aqui o item já nasce desabilitado; o que traz o
- * arquivo é abrir (ver electron/materiais.ts).
+ * arquivo é abrir (ver electron/materiais.ts). Não é guarda de permissão, é
+ * estado do disco — por isso não mora em `lib/guardas.ts`.
  */
 function local(node: TreeNode) {
   return !node.remoto;
-}
-
-/**
- * Onde dá para SOLTAR arquivo vindo do Windows — espelha `isImportavel` do
- * vault.ts.
- *
- * É mais largo que `gravavel` de propósito: `Notes/INATEL` não aceita edição
- * (é a fonte que o ingest lê), mas aceita matéria nova. O que protege o
- * material é a importação nunca sobrescrever nome que já existe.
- */
-function recebeDeFora(rel: string) {
-  return rel === "Notes" || rel.startsWith("Notes/");
 }
 
 /**

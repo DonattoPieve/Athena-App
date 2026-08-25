@@ -535,6 +535,27 @@ function registerIpc() {
     requireVault().write(rel, content),
   );
   ipcMain.handle("fs:subjects", () => requireVault().subjects());
+  /**
+   * O material de origem de uma pagina, no caminho que existe em QUALQUER PC.
+   *
+   * O espelho entra aqui porque num vault recem-criado a pasta da materia esta
+   * vazia: o arquivo existe na conta, ainda nao no disco. Falhar a listagem
+   * (sem rede, sem cache) nao pode derrubar a leitura da pagina — sem ela a
+   * busca continua, so que restrita ao que ja desceu.
+   */
+  ipcMain.handle(
+    "fs:materialDaPagina",
+    async (_e, relPagina: string, source: string | null, sourceHref: string | null) => {
+      const v = requireVault();
+      let remotos: string[] = [];
+      try {
+        remotos = (await materiais.espelho(v.root)).map((i) => i.rel);
+      } catch {
+        /* sem rede e sem listagem guardada: vale o que estiver no disco */
+      }
+      return v.materialDaPagina(relPagina, source, sourceHref, remotos);
+    },
+  );
   ipcMain.handle("fs:describe", (_e, code: string, lesson: string | null) =>
     requireVault().describe(code, lesson),
   );

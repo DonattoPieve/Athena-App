@@ -49,12 +49,16 @@ jobs:
 
       - run: npm ci
 
+      # `npm test`, e nao a lista escrita a mao que estava aqui: ela tinha
+      # ficado para tras justamente nos dois testes que guardam o material do
+      # professor (`test:importar` e `test:espelho`), entao um instalador podia
+      # ser publicado com essa regra quebrada. Assim, teste novo entra no CI
+      # sozinho. Todos rodam offline — inclusive o do Worker, que sobe um
+      # bucket e um Supabase de mentira (ver worker/teste.mjs).
       - name: Typecheck e testes
         run: |
           npm run typecheck
-          npm run test:md
-          npm run test:progresso
-          npm run test:worker
+          npm test
 
       - name: Instalador e publicação
         run: npm run dist:publish

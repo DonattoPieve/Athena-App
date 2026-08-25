@@ -126,6 +126,7 @@ await pagina.addInitScript(`
             isMaximized: async () => false, onMaximized: nada },
     fs: {
       tree: async () => arvore, subjects: vazio, describe: async () => null, lessons: vazio,
+      materialDaPagina: async () => null,
       read: async () => ${JSON.stringify(PAGINA)},
       write: async () => {}, slug: async (s) => s, reveal: async () => {}, mkdir: async () => {},
       create: async () => {}, rename: async (r) => r, trash: async () => true,

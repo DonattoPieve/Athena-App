@@ -145,12 +145,32 @@ export function Leitura({
   }, [rel, pasta]);
 
   /**
-   * `sourceHref` é relativo ao public/ do site (`/materials/...`). No disco o
-   * mesmo arquivo está em `athena-web/public/...`, e abre numa aba do app em
-   * vez de num programa de fora — é a mesma janela, com o texto ao lado.
+   * O material de origem, resolvido pelo main.
+   *
+   * O `sourceHref` do frontmatter aponta para a cópia que o SITE serve
+   * (`athena-web/public/materials/...`), e essa cópia só existe na máquina
+   * onde o ingest rodou — não está no `Notes/` e o Worker do R2 não serve
+   * aquele prefixo. Montar o caminho aqui, como era antes, dava um botão que
+   * abria no PC do Donatto e falhava em qualquer outro. Quem sabe achar o
+   * arquivo do professor (no disco ou na conta) é o `materialDaPagina` do
+   * vault — e o que ele devolve o app baixa sozinho no primeiro clique.
    */
-  const materialRel = fm.sourceHref ? `athena-web/public${fm.sourceHref}` : null;
-  const ext = (fm.sourceHref?.split(".").pop() ?? "").toLowerCase();
+  const [materialRel, setMaterialRel] = useState<string | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    setMaterialRel(null);
+    if (!fm.source && !fm.sourceHref) return;
+    api.fs
+      .materialDaPagina(rel, fm.source ?? null, fm.sourceHref ?? null)
+      .then((r) => vivo && setMaterialRel(r))
+      .catch(() => vivo && setMaterialRel(null));
+    return () => {
+      vivo = false;
+    };
+  }, [rel, fm.source, fm.sourceHref]);
+
+  const ext = ((materialRel ?? fm.sourceHref ?? "").split(".").pop() ?? "").toLowerCase();
   const comoAbre = ext === "pdf" ? t("abrir PDF") : ext.startsWith("ppt") ? t("abrir apresentação") : t("abrir arquivo");
 
   return (

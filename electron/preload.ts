@@ -69,6 +69,8 @@ const api = {
     write: (rel: string, content: string) =>
       ipcRenderer.invoke("fs:write", rel, content),
     subjects: () => ipcRenderer.invoke("fs:subjects"),
+    materialDaPagina: (relPagina: string, source: string | null, sourceHref: string | null) =>
+      ipcRenderer.invoke("fs:materialDaPagina", relPagina, source, sourceHref),
     describe: (code: string, lesson: string | null) =>
       ipcRenderer.invoke("fs:describe", code, lesson),
     slug: (input: string) => ipcRenderer.invoke("fs:slug", input),

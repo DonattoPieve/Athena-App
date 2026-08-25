@@ -85,15 +85,28 @@ electron/
 
 As invariantes do `CLAUDE.md` são código, não promessa:
 
-| Caminho | App |
-|---|---|
-| `Notes/subjects`, `Notes/concepts`, `Notes/games`, `Notes/studies` | leitura e escrita |
-| `Notes/INATEL/` | somente leitura |
-| `Resumos/` | somente leitura |
-| fora da raiz do vault | bloqueado |
+São três permissões diferentes, e confundi-las é o erro que mais custou aqui:
 
-Editar uma página gerada é impossível pelo app. Correção de conteúdo é
-reprocessar a aula.
+| ação | onde vale | quem decide |
+|---|---|---|
+| **editar** (renomear, mover, salvar) | `Notes/` inteiro, menos `Notes/INATEL/` | `isWritable` |
+| **acrescentar** (criar, arrastar de fora) | `Notes/` inteiro, INATEL incluído | `isImportavel` |
+| **apagar** (lixeira do Windows) | `Notes/` inteiro **+** `Resumos/` | `isDeletable` |
+| qualquer uma, fora da raiz do vault | bloqueado | `resolve` |
+
+Acrescentar vale no INATEL porque **nunca sobrescreve**: nome que já existe é
+recusado, não substituído. Editar continua proibido lá — é a fonte que o ingest
+lê, e um estrago ali só aparece na página gerada, semanas depois. Editar uma
+página de `Resumos/` é impossível pelo app: correção de conteúdo é reprocessar
+a aula.
+
+**As mesmas três regras existem em dois lugares.** O `vault.ts` recusa a
+operação; o `src/lib/guardas.ts` decide o que o menu de contexto oferece — o
+renderer não pode importar código do main. Elas já divergiram duas vezes
+(1.0.9 e 1.0.12), sempre com o mesmo sintoma: item de menu cinza, sem
+explicação, para uma ação que o app faria sem problema. Hoje quem impede a
+terceira vez é o `npm run test:guardas`, que roda as duas implementações sobre
+a mesma lista de caminhos e falha na primeira discordância.
 
 ### Sessão de ingest
 
@@ -229,6 +242,17 @@ layout como o professor montou.
 Os dois usam o esquema **`athena://file/<caminho>`**, registrado no main. Existe
 porque a janela roda em `http://localhost:5173` no dev, e o Chromium bloqueia
 `file://` vindo dessa origem. É o mesmo caminho que serve as imagens da nota.
+
+**"Material de origem" não usa o caminho do site.** O frontmatter da página traz
+`sourceHref: "/materials/C09-.../aula.pdf"`, que é a cópia gravada pelo ingest em
+`athena-web/public/materials/` — pasta que não está no `Notes/` e cujo prefixo o
+Worker não serve (as chaves seriam iguais para todas as contas, e o Worker só
+grava debaixo de `u/<id>/`; ver `SERVIDOS` no `publicar.ts`). Montar o link a
+partir dela dava um botão que abria numa máquina e falhava em todas as outras.
+Quem resolve hoje é `vault.materialDaPagina()`: acha o arquivo do professor em
+`Notes/INATEL/<matéria>/` pelo `source` do frontmatter (com slug como plano B),
+olhando **disco e espelho do bucket** — então funciona num PC onde nada foi
+baixado ainda, e o clique traz o arquivo. Coberto por `npm run test:material`.
 
 ### Editor de nota (Tiptap)
 

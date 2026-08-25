@@ -204,6 +204,48 @@ async function planejarCopia(
   plano.push({ de, para, rel });
 }
 
+/** Extensoes que contam como material do professor. */
+const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
+
+/**
+ * Qual desses arquivos e o material que gerou a pagina.
+ *
+ * A ordem importa. O `source` do frontmatter e o nome ORIGINAL do arquivo
+ * ("12. Compressao de Imagens (Parte 1).pdf") e casa exato quase sempre. O
+ * `sourceHref` e o caminho da copia que o SITE serve, e essa copia foi
+ * gravada com o slug da PAGINA — dai a comparacao por slug, e por "contem":
+ * o nome original costuma comecar com o numero da aula, que o slug da pagina
+ * nao tem.
+ */
+function escolherMaterial(
+  rels: string[],
+  source: string | null,
+  sourceHref: string | null,
+): string | null {
+  const nome = (r: string) => path.posix.basename(r);
+
+  if (source) {
+    const exato = rels.find((r) => nome(r) === source);
+    if (exato) return exato;
+    const semCaixa = rels.find((r) => nome(r).toLowerCase() === source.toLowerCase());
+    if (semCaixa) return semCaixa;
+    const porSlug = rels.find((r) => slugify(nome(r)) === slugify(source));
+    if (porSlug) return porSlug;
+  }
+
+  const alvo = sourceHref ? slugify(path.posix.basename(sourceHref)) : "";
+  if (alvo) {
+    const igual = rels.find((r) => slugify(nome(r)) === alvo);
+    if (igual) return igual;
+    const parecido = rels.find((r) => {
+      const s = slugify(nome(r));
+      return s.includes(alvo) || alvo.includes(s);
+    });
+    if (parecido) return parecido;
+  }
+  return null;
+}
+
 export class Vault {
   readonly root: string;
 
@@ -668,6 +710,69 @@ export class Vault {
       onProgresso?.({ feitos: copiados, total, nome: item.rel });
     }
     return { copiados, jaExistiam };
+  }
+
+  /**
+   * Onde esta, DE VERDADE, o material que gerou uma pagina de `Resumos/`.
+   *
+   * O frontmatter da pagina traz `sourceHref: "/materials/C09-.../aula.pdf"`,
+   * que e o caminho da COPIA que o site serve — `athena-web/public/materials/`.
+   * Essa copia so existe na maquina onde o ingest rodou: ela nao esta no
+   * `Notes/`, e o Worker do R2 nao serve o prefixo `materials/` (as chaves de
+   * la seriam iguais para todas as contas, e o Worker so grava debaixo de
+   * `u/<id>/` — ver `SERVIDOS` no publicar.ts). Num PC novo o botao "abrir
+   * PDF" apontava para um arquivo que nao existe e nao tem como existir.
+   *
+   * O arquivo de verdade e o do professor, em `Notes/INATEL/<materia>/`, que o
+   * app sabe baixar sozinho no primeiro clique. Este metodo faz a traducao.
+   *
+   * `remotos` sao os caminhos que existem no bucket desta conta (o espelho, em
+   * caminho de vault) — sem eles, num vault recem-criado a pasta da materia
+   * esta vazia e nao haveria o que casar.
+   */
+  async materialDaPagina(
+    relPagina: string,
+    source: string | null,
+    sourceHref: string | null,
+    remotos: string[] = [],
+  ): Promise<string | null> {
+    const pagina = relPagina.split(path.sep).join("/").replace(/^\/+/, "");
+    const pastaDaPagina = path.posix.basename(path.posix.dirname(pagina));
+    // "C09-Computacao-Grafica" -> "C09"; "C14 - Engenharia" -> "C14".
+    const code = pastaDaPagina.split(/[-\s]/)[0]?.trim() ?? "";
+    if (!code) return null;
+
+    const naNuvem = remotos.map((r) => r.split(path.sep).join("/"));
+    const base = `${NOTAS}/INATEL`;
+
+    let pasta = await this.findFolder(base, code);
+    if (!pasta) {
+      // Nada baixado ainda: a pasta da materia vem da listagem do bucket.
+      const prefixo = base + "/";
+      const achado = naNuvem
+        .filter((r) => r.startsWith(prefixo))
+        .map((r) => r.slice(prefixo.length).split("/")[0])
+        .find((n) => n.toUpperCase().startsWith(code.toUpperCase()));
+      if (achado) pasta = prefixo + achado;
+    }
+
+    if (pasta) {
+      const daPasta = (await this.listDir(pasta)).map((n) => path.posix.join(pasta, n));
+      const doBucket = naNuvem.filter((r) => r.startsWith(pasta + "/"));
+      const candidatos = [...new Set([...daPasta, ...doBucket])].filter((r) =>
+        MATERIAL.test(r),
+      );
+      const escolhido = escolherMaterial(candidatos, source, sourceHref);
+      if (escolhido) return escolhido;
+    }
+
+    // Vault antigo que ainda tem a copia do site no disco: abrir ela e melhor
+    // do que nao abrir nada.
+    if (sourceHref) {
+      const doSite = path.posix.join("athena-web", "public", sourceHref.replace(/^\/+/, ""));
+      if (await this.exists(doSite)) return doSite;
+    }
+    return null;
   }
 
   /** Caminho absoluto para a lixeira do sistema (quem chama e o main). */

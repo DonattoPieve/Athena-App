@@ -210,6 +210,15 @@ type AthenaBridge = {
     read(rel: string): Promise<string>;
     write(rel: string, content: string): Promise<void>;
     subjects(): Promise<SubjectRef[]>;
+    /**
+     * Caminho do material que gerou uma página, valendo em qualquer PC.
+     * `null` quando o arquivo não existe nem no disco nem na conta.
+     */
+    materialDaPagina(
+      relPagina: string,
+      source: string | null,
+      sourceHref: string | null,
+    ): Promise<string | null>;
     describe(code: string, lesson: string | null): Promise<Target>;
     slug(input: string): Promise<string>;
     reveal(rel: string): Promise<void>;
