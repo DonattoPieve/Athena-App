@@ -1,6 +1,6 @@
 # CLAUDE.md — Guia Operacional do Athena
 
-Instruções para o Claude Code operar o vault. Ingest **manual**: roda no terminal do PC, na conta Pro. O usuário decide quando processar cada nota.
+Instruções para o Claude Code operar o vault. Ingest **manual**: quem dispara é o usuário — pelo **athena-app** (janela, aba Comandos) ou pelo `athena.bat` (terminal), sempre na conta Pro da máquina. Nunca sozinho, nunca no horário.
 
 > **Gerando página?** Ler o `TEMPLATE.md`.
 > **Mexendo no site (`athena-web`)?** Ler o `DESIGN.md` antes.
@@ -26,10 +26,17 @@ Notes/
   attachments/                imagens coladas nas notas
   concepts/ games/ studies/   arquivo pessoal — NUNCA ingerir
 Resumos/subjects/<CODIGO>-Nome/<AULA>.md    um arquivo por aula, sem subpasta
-athena-web/public/materials/<CODIGO>-Nome/<AULA>.<ext>
-athena-web/public/attachments/<CODIGO>-Nome/<arquivo>
+athena-web/                  SÓ nos vaults com o site clonado — ver abaixo
+  public/materials/<CODIGO>-Nome/<AULA>.<ext>
+  public/attachments/<CODIGO>-Nome/<arquivo>
+.athena/                     cópias e cache do app — nunca é fonte, nunca editar
 index.md · log.md · .ingest-status       raiz do vault
 ```
+
+**`athena-web/` pode não existir.** Vault criado pelo app nasce sem o site
+dentro, e isso é normal: o conteúdo mora no Supabase e no R2, e o app acha o
+material do professor em `Notes/INATEL/`. Todo passo que envolve
+`athena-web/` é condicional — faltar essa pasta nunca é motivo para parar.
 
 O código e o nome da matéria saem do nome da pasta em `Notes/subjects/` (`E09-Microcontroladores` → `E09`, "Microcontroladores").
 
@@ -89,13 +96,15 @@ athena redo <CODIGO> <AULA>   reprocessa com reescrita forçada
 
 **O ingest só gera arquivos.** Publicação no Supabase, upload pro R2 e remoção do que sumiu acontecem **fora** dele, depois do `.ingest-status = OK`. É isso que faz a guarda valer: ingest interrompido não deixa nada no banco.
 
-Quem chama o ingest são **dois clientes**, e o contrato é o mesmo para os dois: o `athena.bat` (terminal) e o **athena-app** (janela, em `~/Desktop/athena-app`). Os dois montam o mesmo comando, leem o mesmo `.ingest-status` e rodam o mesmo `athena-publish.mjs`. Nenhuma regra deste arquivo muda conforme o cliente.
+Quem chama o ingest são **dois clientes**, e o contrato é o mesmo para os dois: o `athena.bat` (terminal) e o **athena-app** (janela, aba Comandos). Os dois montam o mesmo comando e leem o mesmo `.ingest-status`.
+
+A publicação em si difere, e não muda nada para o ingest: o `.bat` roda o `athena-publish.mjs` do vault; o app publica por dentro (`electron/publicar.ts`), falando com o Supabase e com o R2 pelo próprio portão. Mesmo destino, caminhos diferentes. **Nenhuma regra deste arquivo muda conforme o cliente.**
 
 Também **não toca no git** — o repositório não participa do fluxo de conteúdo — e **não escreve em `Notes/`** (ver "Nunca modificar").
 
 ### Quando o fluxo para para perguntar
 
-Candidato ambíguo, matéria sem nome, renomeação suspeita: o status fica `FAIL` e o `.bat` reporta que nada foi publicado. Isso é correto, não é erro. Encerrar com a linha literal:
+Candidato ambíguo, matéria sem nome, renomeação suspeita: o status fica `FAIL`, e o cliente — `.bat` ou app — reporta que nada foi publicado. Isso é correto, não é erro. Encerrar com a linha literal:
 
 ```
 AGUARDANDO RESPOSTA — nada foi publicado. Responda e rode o comando de novo.
@@ -115,9 +124,11 @@ Rodar `athena` numa aula que já tem página **sobrescreve**, não duplica. Atua
 
 O `redo` existe porque reprocessar tende a "sair igual" quando a página anterior está à mão — use quando o objetivo é mudar estrutura ou abordagem.
 
+Antes de reprocessar, o app guarda uma cópia da página em `.athena/lixeira/`. Ela é rede de segurança do usuário, **não é fonte**: reaproveitar o que está lá é a mesma violação que reaproveitar a página anterior.
+
 **Detecção de renomeação:** antes de criar página nova, checar se a matéria já tem uma página com o **mesmo `source`** e slug diferente. Se tiver, **perguntar**: renomeação ou aula nova?
 
-- **Renomeação** → gerar a nova e apagar a antiga em `Resumos/` e em `public/materials/`, corrigindo o `[[wikilink]]` no MOC. O banco se resolve no publish. Nunca deixar as duas convivendo: vira contagem dobrada e nó órfão no grafo
+- **Renomeação** → gerar a nova e apagar a antiga em `Resumos/` (e em `public/materials/`, se essa pasta existir), corrigindo o `[[wikilink]]` no MOC. O banco se resolve no publish. Nunca deixar as duas convivendo: vira contagem dobrada e nó órfão no grafo
 - **Aula nova** → seguir (duas aulas podem sair do mesmo PDF)
 
 Favoritos e histórico são por URL: mudar o slug quebra o favorito do usuário. Avisar.
