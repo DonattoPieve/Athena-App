@@ -130,32 +130,35 @@ jobs:
           cache: npm
       - run: npm ci
 
-      # Instalar o navegador e usar o navegador no MESMO passo, com a pasta
-      # exportada ali dentro.
+      # Instalar e usar o Chromium no mesmo passo — e SEM passar pelo `npm run`.
       #
-      # A imagem do runner ja vem com `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`
-      # (e provavelmente com `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD`), entao o
-      # `install` nao baixava nada e o `launch` procurava em
-      # `/opt/pw-browsers/chromium-1194/...`, que nao existe. Tentei corrigir
-      # com `env:` no nivel do job usando `${{ github.workspace }}` — nao
-      # adiantou: essa expressao nao vale no env do job, virou string vazia, e
-      # a variavel da imagem continuou mandando.
+      # Historia curta: o `install` obedecia o export e baixava em
+      # `.pw-navegadores/chromium-1234`, e o `launch` ia procurar em
+      # `/opt/pw-browsers/chromium-1194`. Pastas E versoes diferentes.
       #
-      # Um `export` no shell nao tem essa ambiguidade: vale para os comandos
-      # que vem depois dele, no mesmo passo, e ponto.
+      # A unica diferenca entre os dois comandos era o `npm run` no segundo. A
+      # imagem do runner traz o caminho do Playwright na CONFIG do npm, e o
+      # `npm run` injeta a config dele como `npm_config_*` no processo filho —
+      # que o Playwright tambem le, e que ganha do meu export. Chamando o
+      # `node` direto, essa injecao nao acontece.
+      #
+      # As duas primeiras linhas imprimem o ambiente antes de tentar: se isto
+      # falhar de novo, a resposta vem do log, nao de mais um palpite meu.
       - name: Prints das telas
         env:
           ATHENA_TELAS_DIR: telas
         run: |
           export PLAYWRIGHT_BROWSERS_PATH="$PWD/.pw-navegadores"
           export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
+          env | grep -i playwright || echo "(nenhuma variavel PLAYWRIGHT no ambiente)"
+          npm config get playwright_browsers_path || true
           npx playwright install --with-deps chromium
           # So o renderer: o `build` completo tambem compila o main do
           # Electron, que nao tem nada a ver com print de tela.
           npx vite build
           mkdir -p telas
-          npm run telas
-          npm run telas -- --en
+          node scripts/telas.mjs
+          node scripts/telas.mjs --en
 
       - uses: actions/upload-artifact@v4
         with:
