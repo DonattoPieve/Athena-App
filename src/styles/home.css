@@ -260,3 +260,64 @@ button.home-vermais:hover {
 @media (max-width: 900px) {
   .home-acoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ------------------------------------------------------------------ *
+ * "Falta processar" — aulas do professor que ainda não viraram página.
+ *
+ * Fica acima do resumo do conteúdo porque é a única parte da Home que pede
+ * uma AÇÃO. Só aparece quando há algo: card de "tudo em dia" seria ruído
+ * diário, e ruído diário é o que faz um aviso ser ignorado no dia em que
+ * importa.
+ * ------------------------------------------------------------------ */
+.home-pendencias {
+  padding: 16px;
+  margin-bottom: 14px;
+  border-left: 2px solid var(--c-accent);
+}
+.home-pend-sub {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--c-muted);
+}
+.home-pend-materia + .home-pend-materia {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--c-border);
+}
+.home-pend-titulo {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--c-accent);
+}
+.home-pendencias ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.home-pendencias li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--c-text);
+}
+.home-pendencias li .truncar {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-pendencias li .btn {
+  flex: 0 0 auto;
+  padding: 3px 10px;
+  font-size: 11px;
+}
+.home-pend-mais {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--c-muted);
+}

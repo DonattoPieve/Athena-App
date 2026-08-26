@@ -102,6 +102,38 @@ O que continua exigindo arquivo de verdade: o ingest. O motor é um agente de
 terminal que roda com `cwd` na raiz do vault e abre o PDF do professor pelo
 caminho — sem pasta não há ingest.
 
+### Lançar uma versão
+
+```cmd
+npm run lancar          :: patch; aceita minor|major, e --seco para não empurrar
+```
+
+Um comando porque os cinco passos manuais já falharam um a um: a versão mora
+em **dois** arquivos (`package.json` e o lock, na raiz e em `packages[""]`) e o
+Action recusa se a tag não bater; a tag precisa ser **anotada**; e
+`git push --follow-tags` só leva tag alcançável pelos commits *daquele* push —
+commit já enviado + tag criada depois dá "Everything up-to-date" e a tag fica
+no PC (foi o que segurou a 1.0.13).
+
+O script recusa branch que não seja `main`, árvore suja e tag repetida, e roda
+`typecheck` + `npm test` **antes** de mexer em qualquer coisa: é mais barato
+parar agora do que despublicar um Release depois.
+
+### O protocolo do vault x o que o app instala
+
+`build/esqueleto/CLAUDE.md` é o que o `bootstrap.criarVault()` copia para todo
+vault novo — cópia manual do `CLAUDE.md` do vault. Editar as regras no vault e
+esquecer o esqueleto faz cada vault novo nascer com o protocolo velho, e o
+defeito só aparece semanas depois, noutro PC.
+
+```cmd
+npm run esqueleto:conferir       :: falha se divergirem (roda no npm test)
+npm run esqueleto:sincronizar    :: copia do vault para o app
+```
+
+A fonte é o **vault**; o app é espelho. Sem vault à vista (o CI) o conferir
+diz isso e sai com 0 — por isso ele pode morar dentro do `npm test`.
+
 ### Guardas de escrita
 
 As invariantes do `CLAUDE.md` são código, não promessa:
@@ -260,6 +292,22 @@ Matéria inteira leva minutos, então o main manda o progresso por evento
 340" com barra. O recado do fim ("12 arquivo(s) copiado(s)…") some sozinho em
 12 s: com a pasta fechada ele é a única confirmação visível, mas parado ali
 vira legenda permanente.
+
+### "Falta processar" na Home
+
+O app sabia os dois lados e nunca os cruzava: os PDFs em
+`Notes/INATEL/<matéria>/` e as páginas em `Resumos/subjects/<matéria>/`.
+`vault.pendencias(remotos)` faz o cruzamento e a Home lista o que falta, com um
+botão que enfileira o ingest daquela aula.
+
+Duas sutilezas: o casamento é pelo slug **sem o número** (`slugDaAula`) —
+"12. Compressão de Imagens (Parte 1).pdf" vira `compressao-de-imagens-parte-1`,
+que é o nome que a página tem — e o **espelho entra na conta**, senão num PC
+onde nada desceu a lista diria "não falta nada" no exato momento em que falta
+tudo. MOC e review não contam como aula feita. Coberto por `test:pendencias`.
+
+O bloco some quando não há pendência: um card de "tudo em dia" todo dia é
+ruído, e ruído é o que faz um aviso ser ignorado no dia em que ele importa.
 
 ### Ajuda (janela própria)
 

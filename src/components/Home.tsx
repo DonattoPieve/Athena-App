@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, type Account, type HomeData } from "../lib/api";
+import { api, type Account, type HomeData, type Pendencia } from "../lib/api";
 import { t, tf } from "../lib/i18n";
 import { IconBusca, IconComandos, IconMais, IconPublicar } from "./icons";
 import "../styles/home.css";
@@ -35,6 +35,7 @@ export function Home({
   onNovaNota,
   onComandos,
   onIngest,
+  onProcessar,
   onBuscar,
   dados: dadosProp,
 }: {
@@ -43,6 +44,8 @@ export function Home({
   onComandos: () => void;
   /** Ingest ainda nao tem tela propria — sem handler dedicado, cai em Comandos. */
   onIngest?: () => void;
+  /** Enfileira o ingest de UMA aula que ainda nao tem pagina. */
+  onProcessar?: (code: string, lesson: string) => void;
   /** Sem handler dedicado, o atalho "Buscar" usa o campo desta propria tela. */
   onBuscar?: () => void;
   /** Injetavel por quem monta a tela; sem isto, busca sozinha em api.fs.home(). */
@@ -51,6 +54,8 @@ export function Home({
   const [dados, setDados] = useState<HomeData | null>(dadosProp ?? null);
   const [conta, setConta] = useState<Account | null>(null);
   const [recentes, setRecentes] = useState<Recente[] | null>(null);
+  /** Aulas do professor ainda sem pagina — ver `vault.pendencias()`. */
+  const [pendencias, setPendencias] = useState<Pendencia[]>([]);
   const [ultimaLeitura, setUltimaLeitura] = useState<UltimaLeitura | null>(null);
   const [revisao, setRevisao] = useState<Revisao[] | null>(null);
   const [busca, setBusca] = useState("");
@@ -59,6 +64,12 @@ export function Home({
   useEffect(() => {
     if (dadosProp) return;
     api.fs.home().then(setDados).catch(() => setDados(null));
+  }, [dadosProp]);
+
+  // A lista do que falta processar custa uma ida ao espelho; sai do caminho da
+  // primeira pintura de proposito, e falhar aqui so esconde o bloco.
+  useEffect(() => {
+    api.fs.pendencias?.().then(setPendencias).catch(() => setPendencias([]));
   }, [dadosProp]);
 
   useEffect(() => {
@@ -356,6 +367,52 @@ export function Home({
           )}
         </div>
       </div>
+
+      {/* ---- o que falta processar ----
+           Some quando nao ha nada: um card dizendo "tudo em dia" toda vez que
+           voce abre o app e ruido, e ruido faz o card ser ignorado justo no dia
+           em que ele tem algo a dizer. */}
+      {pendencias.length > 0 && (
+        <div className="card home-pendencias">
+          <p className="label" style={{ margin: "0 0 4px" }}>
+            {t("Falta processar")}
+          </p>
+          <p className="home-pend-sub">
+            {tf("{n} aula(s) do professor ainda sem página.", {
+              n: pendencias.reduce((a, p) => a + p.materiais.length, 0),
+            })}
+          </p>
+          {pendencias.map((p) => (
+            <div key={p.code} className="home-pend-materia">
+              <p className="home-pend-titulo">{p.pasta}</p>
+              <ul>
+                {/* Quatro por materia: uma materia recem-arrastada tem vinte, e
+                    uma parede de vinte linhas nao e uma lista, e um susto. */}
+                {p.materiais.slice(0, 4).map((m) => (
+                  <li key={m.rel}>
+                    <span className="truncar" title={m.nome}>
+                      {m.nome}
+                    </span>
+                    <button
+                      className="btn"
+                      disabled={!onProcessar}
+                      title={tf("Roda: athena {code} {slug}", { code: p.code, slug: m.slug })}
+                      onClick={() => onProcessar?.(p.code, m.slug)}
+                    >
+                      {t("Gerar página")}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {p.materiais.length > 4 && (
+                <p className="home-pend-mais">
+                  {tf("e mais {n} nesta matéria", { n: p.materiais.length - 4 })}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ---- vault + atividade ---- */}
       <div className="duas-colunas">

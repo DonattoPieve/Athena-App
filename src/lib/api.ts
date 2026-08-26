@@ -11,6 +11,13 @@ export type TreeNode = {
 
 export type SubjectRef = { code: string; name: string; folder: string };
 
+/** Uma matéria com aula(s) do professor ainda sem página — ver vault.pendencias(). */
+export type Pendencia = {
+  code: string;
+  pasta: string;
+  materiais: { rel: string; nome: string; slug: string }[];
+};
+
 /** Quanto ja foi copiado do que voce arrastou de fora — ver electron/vault.ts. */
 export type ProgressoImportar = { feitos: number; total: number; nome: string };
 
@@ -212,6 +219,8 @@ type AthenaBridge = {
     read(rel: string): Promise<string>;
     write(rel: string, content: string): Promise<void>;
     subjects(): Promise<SubjectRef[]>;
+    /** Aulas do professor que ainda não viraram página. */
+    pendencias(): Promise<Pendencia[]>;
     /**
      * Caminho do material que gerou uma página, valendo em qualquer PC.
      * `null` quando o arquivo não existe nem no disco nem na conta.

@@ -865,6 +865,13 @@ export default function App() {
                 onNovaNota={() => abrirFixa({ id: "nova-nota", tipo: "nova-nota" })}
                 onComandos={() => abrirFixa(ABA_COMANDOS)}
                 onIngest={() => abrirFixa(ABA_COMANDOS)}
+                onProcessar={async (code, lesson) => {
+                  // Enfileira e leva para os Comandos: o transcript e onde a
+                  // pessoa acompanha, e um botao que "nao faz nada visivel"
+                  // vira dois cliques no mesmo botao.
+                  await api.session.start("ingest", code, lesson);
+                  abrirFixa(ABA_COMANDOS);
+                }}
                 onBuscar={() => setPainel("busca")}
               />
             )}

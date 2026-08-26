@@ -543,6 +543,23 @@ function registerIpc() {
    * (sem rede, sem cache) nao pode derrubar a leitura da pagina — sem ela a
    * busca continua, so que restrita ao que ja desceu.
    */
+  /**
+   * O que o professor postou e ainda nao virou pagina.
+   *
+   * O espelho entra aqui pelo mesmo motivo do `materialDaPagina`: num PC onde
+   * nada desceu, a pasta da materia esta vazia no disco, e a lista viria
+   * dizendo "nao falta nada" no momento em que falta tudo.
+   */
+  ipcMain.handle("fs:pendencias", async () => {
+    const v = requireVault();
+    let remotos: string[] = [];
+    try {
+      remotos = (await materiais.espelho(v.root)).map((i) => i.rel);
+    } catch {
+      /* sem rede e sem listagem guardada: vale o que estiver no disco */
+    }
+    return v.pendencias(remotos);
+  });
   ipcMain.handle(
     "fs:materialDaPagina",
     async (_e, relPagina: string, source: string | null, sourceHref: string | null) => {

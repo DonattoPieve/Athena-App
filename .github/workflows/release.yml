@@ -11,18 +11,23 @@ name: release
 # `latest.yml` publica e que o app instalado compara. Se estiverem diferentes, o
 # passo de conferência abaixo quebra o build antes de publicar nada.
 #
-# Para lançar:
-#   npm version patch      # sobe o package.json e cria a tag
-#   git push --follow-tags
+# Para lançar:  npm run lancar
+# (confere, sobe a versão nos dois arquivos, cria a tag anotada e empurra.)
 
 on:
   push:
+    # `main` não builda instalador — só tira os prints (job `telas`), que é
+    # como uma regressão de interface aparece antes de virar Release.
+    branches: [main]
     tags: ["v*"]
   # Deixa disparar à mão pelo site do GitHub, para quando a tag já existe.
   workflow_dispatch:
 
 jobs:
   windows:
+    # SÓ em tag. Sem esta linha, um push na main chegaria ao `dist:publish`,
+    # que publica com `--publish always` — Release sem versão, do nada.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     permissions:
       # O electron-builder usa o GITHUB_TOKEN para criar o Release e subir o .exe.
@@ -70,3 +75,72 @@ jobs:
         run: npm run dist:publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ------------------------------------------------------------------
+  # O portão do R2, publicado junto da versão.
+  #
+  # O 405 de 25/08 existiu por isto: a rota DELETE estava no disco havia dias
+  # e o `wrangler deploy` não tinha rodado, então o app instalado pedia para
+  # apagar numa porta que não existia. Amarrando o deploy à tag, o Worker
+  # publicado é sempre o do código que gerou o instalador.
+  #
+  # O token é de API da Cloudflare (Workers Scripts: Edit) e NÃO é a chave do
+  # R2 — o bucket continua entrando por binding, sem credencial nenhuma (ver
+  # worker/wrangler.jsonc). Enquanto o segredo não existir, o passo é pulado
+  # em vez de derrubar o release.
+  # ------------------------------------------------------------------
+  worker:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Publicar o Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "Sem CLOUDFLARE_API_TOKEN nos Secrets — deploy do Worker pulado."
+            echo "Crie o token na Cloudflare (Workers Scripts: Edit) e adicione em"
+            echo "Settings > Secrets and variables > Actions."
+            exit 0
+          fi
+          npx --yes wrangler deploy --config worker/wrangler.jsonc
+
+  # ------------------------------------------------------------------
+  # Prints das telas.
+  #
+  # Roda a cada push na main, com a ponte falsa do `telas.mjs` (nada de conta,
+  # nada de disco). É o único jeito de uma regressão de interface aparecer sem
+  # alguém abrir o app — e quem trabalha por uma ponte que só enxerga arquivos
+  # não abre o app nunca.
+  #
+  # Não bloqueia release nenhum: se quebrar, quebra sozinho, e as imagens
+  # ficam no artefato "telas" da execução.
+  # ------------------------------------------------------------------
+  telas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Só o renderer: o `build` completo também compila o main do Electron,
+      # que não tem nada a ver com print de tela.
+      - run: npx vite build
+      - name: Tirar os prints
+        env:
+          ATHENA_TELAS_DIR: telas
+        run: |
+          mkdir -p telas
+          npm run telas
+          npm run telas -- --en
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telas
+          path: telas/

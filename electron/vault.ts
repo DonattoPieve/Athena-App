@@ -152,6 +152,15 @@ export function migrarNomesAntigos(vaultRoot: string): string[] {
   return feitas;
 }
 
+/** Uma materia com aula(s) do professor que ainda nao viraram pagina. */
+export type Pendencia = {
+  /** Codigo da materia, do jeito que o comando pede: "C09". */
+  code: string;
+  /** Nome da pasta, para a tela mostrar algo que a pessoa reconheca. */
+  pasta: string;
+  materiais: { rel: string; nome: string; slug: string }[];
+};
+
 /** Um arquivo a copiar, ja resolvido: de onde, para onde, e como se chama na tela. */
 type ItemPlano = { de: string; para: string; rel: string };
 
@@ -206,6 +215,21 @@ async function planejarCopia(
 
 /** Extensoes que contam como material do professor. */
 const MATERIAL = /\.(pdf|pptx?|docx?)$/i;
+
+/**
+ * Slug da AULA a partir do nome do arquivo do professor.
+ *
+ * O material vem numerado ("12. Compressao de Imagens (Parte 1).pdf") e as
+ * paginas do vault NAO levam o numero (`compressao-de-imagens-parte-1.md`) —
+ * e o `CLAUDE.md` casa nota e material por esse slug sem numero. Mandar o
+ * numero junto criaria `12-compressao-...`, uma pagina irma da que ja existe,
+ * com o mesmo conteudo e outro endereco.
+ *
+ * `^\d+-` e estreito de proposito: pega "12-" e nao pega "3d-transformacoes".
+ */
+export function slugDaAula(nomeArquivo: string): string {
+  return slugify(nomeArquivo).replace(/^\d+-/, "");
+}
 
 /**
  * Qual desses arquivos e o material que gerou a pagina.
@@ -773,6 +797,78 @@ export class Vault {
       if (await this.exists(doSite)) return doSite;
     }
     return null;
+  }
+
+  /**
+   * Aulas do professor que ainda NAO viraram pagina.
+   *
+   * O app sabe os dois lados e nunca os cruzava: os PDFs em
+   * `Notes/INATEL/<materia>/` e as paginas em `Resumos/subjects/<materia>/`.
+   * Depois de arrastar uma materia com doze aulas, lembrar quais ja foram
+   * processadas era trabalho de memoria — e memoria erra para menos, entao
+   * aula ficava de fora sem ninguem notar.
+   *
+   * `remotos` sao os caminhos do bucket desta conta (o espelho): num PC onde
+   * nada desceu, a pasta da materia esta vazia no disco e a lista viria vazia
+   * — dizendo "nao falta nada" justamente quando falta tudo.
+   *
+   * O que casa aula e pagina e o slug SEM o numero (ver `slugDaAula`), com
+   * "contem" nas duas direcoes como rede: nome de arquivo e nome de pagina
+   * divergem em pontuacao com mais frequencia do que se imagina.
+   */
+  async pendencias(remotos: string[] = []): Promise<Pendencia[]> {
+    const base = `${NOTAS}/INATEL`;
+    const naNuvem = remotos
+      .map((r) => r.split(path.sep).join("/"))
+      .filter((r) => r.startsWith(base + "/"));
+
+    const pastas = new Set<string>(await this.listDir(base));
+    for (const r of naNuvem) {
+      const nome = r.slice(base.length + 1).split("/")[0];
+      if (nome) pastas.add(nome);
+    }
+
+    const saida: Pendencia[] = [];
+    for (const pasta of [...pastas].sort((a, b) => a.localeCompare(b))) {
+      const code = pasta.split(/[-\s]/)[0]?.trim() ?? "";
+      if (!code) continue;
+
+      const arquivos = new Set<string>(
+        (await this.listDir(path.posix.join(base, pasta))).filter((n) => MATERIAL.test(n)),
+      );
+      for (const r of naNuvem) {
+        const dentro = r.slice(base.length + 1);
+        const [dono, ...resto] = dentro.split("/");
+        // So o primeiro nivel: subpasta de material ("extras/") nao e aula.
+        if (dono === pasta && resto.length === 1 && MATERIAL.test(resto[0])) {
+          arquivos.add(resto[0]);
+        }
+      }
+      if (arquivos.size === 0) continue;
+
+      const feitas = await this.slugsPublicados(code);
+      const materiais = [...arquivos]
+        .sort((a, b) => a.localeCompare(b))
+        .map((nome) => ({ nome, rel: path.posix.join(base, pasta, nome), slug: slugDaAula(nome) }))
+        .filter(({ slug }) => !feitas.some((s) => s === slug || s.includes(slug) || slug.includes(s)));
+
+      if (materiais.length) saida.push({ code, pasta, materiais });
+    }
+    return saida;
+  }
+
+  /** Slugs de aula que ja existem em `Resumos/` para uma materia. */
+  private async slugsPublicados(code: string): Promise<string[]> {
+    const pasta = await this.findFolder(`${RESUMOS}/subjects`, code);
+    if (!pasta) return [];
+    const materia = path.posix.basename(pasta);
+    return (await this.listDir(pasta))
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => f.slice(0, -3))
+      // O MOC e o indice da materia e o review e exercicio: nenhum dos dois e
+      // a pagina de uma aula, e contar qualquer um deles esconderia trabalho
+      // que ainda falta fazer.
+      .filter((slug) => slug !== materia && !slug.endsWith("-review"));
   }
 
   /** Caminho absoluto para a lixeira do sistema (quem chama e o main). */

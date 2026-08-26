@@ -47,6 +47,12 @@ const TELAS_EN = {
 
 const argv = process.argv.slice(2);
 const EN = argv.includes("--en");
+/**
+ * Onde os PNG caem. `/tmp` continua o padrao (e o que eu uso na mao), mas o
+ * CI precisa de uma pasta dentro do repositorio para guardar como artefato —
+ * e `/tmp` no Windows do Action nem sempre e onde se pensa que e.
+ */
+const SAIDA = process.env.ATHENA_TELAS_DIR ?? "/tmp";
 const TELAS = EN ? TELAS_EN : TELAS_PT;
 const pedidas = argv.filter((a) => a !== "--en");
 const alvos = pedidas.length ? pedidas : Object.keys(TELAS);
@@ -126,7 +132,7 @@ await pagina.addInitScript(`
             isMaximized: async () => false, onMaximized: nada, ajuda: async () => true },
     fs: {
       tree: async () => arvore, subjects: vazio, describe: async () => null, lessons: vazio,
-      materialDaPagina: async () => null, onApagado: nada,
+      materialDaPagina: async () => null, onApagado: nada, pendencias: async () => [],
       read: async () => ${JSON.stringify(PAGINA)},
       write: async () => {}, slug: async (s) => s, reveal: async () => {}, mkdir: async () => {},
       create: async () => {}, rename: async (r) => r, trash: async () => true,
@@ -201,7 +207,7 @@ for (const chave of alvos) {
     await pagina.locator(".lateral-item", { hasText: titulo }).first().click();
   }
   await pagina.waitForTimeout(600);
-  const caminho = `/tmp/tela-${chave}${EN ? "-en" : ""}.png`;
+  const caminho = join(SAIDA, `tela-${chave}${EN ? "-en" : ""}.png`);
   await pagina.screenshot({ path: caminho, fullPage: false });
   console.log(caminho);
 }
