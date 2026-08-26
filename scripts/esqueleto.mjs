@@ -23,7 +23,7 @@ import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ARQUIVOS = ["CLAUDE.md", "COMANDOS.md"];
+const ARQUIVOS = ["CLAUDE.md", "COMANDOS.md", "TEMPLATE.md"];
 const sincronizar = process.argv.includes("--sincronizar");
 
 /** O mesmo caminho que o app usa — uma configuração, não um palpite. */

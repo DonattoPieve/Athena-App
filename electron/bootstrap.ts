@@ -43,7 +43,7 @@ const PASTAS_DO_VAULT = [
 ];
 
 /**
- * Onde moram os arquivos-modelo (`CLAUDE.md`, `COMANDOS.md`) que vão dentro
+ * Onde moram os arquivos-modelo (`CLAUDE.md`, `COMANDOS.md`, `TEMPLATE.md`) que vão dentro
  * do vault novo.
  *
  * Mesmo truque do `iconePath()` em main.ts: `app.getAppPath()` aponta para a
@@ -102,7 +102,11 @@ export async function criarVault(destino: string): Promise<void> {
     "utf8",
   );
 
-  for (const nome of ["CLAUDE.md", "COMANDOS.md"]) {
+  // O `TEMPLATE.md` entra aqui porque o proprio protocolo o exige: o passo 4
+  // do `CLAUDE.md` manda "seguir o TEMPLATE.md". Sem ele, um vault criado pelo
+  // app parava o ingest na primeira aula, perguntando onde estava o arquivo —
+  // e a resposta era "em outro vault, porque o app nunca o copiou".
+  for (const nome of ["CLAUDE.md", "COMANDOS.md", "TEMPLATE.md"]) {
     const origem = caminhoEsqueleto(nome);
     if (!fsSync.existsSync(origem)) {
       // Só acontece se o instalador saiu sem build/esqueleto/** empacotado —

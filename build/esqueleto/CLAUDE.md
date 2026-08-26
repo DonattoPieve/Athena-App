@@ -63,7 +63,7 @@ athena redo <CODIGO> <AULA>   reprocessa com reescrita forçada
 2. **Verifica SEMPRE `Notes/INATEL/<CODIGO>-*/`, mesmo tendo achado a nota.** O material oficial é a fonte principal; a nota complementa. Match tolerante igual (`logica-bit-a-bit` casa com `Logica Bit a Bit.pdf`).
    - **Um match** → é a fonte principal
    - **Vários candidatos ou match parcial** → listar e perguntar. Nunca escolher sozinho
-   - **Nenhum** → antes de desistir, procurar em `athena-web/public/materials/<CODIGO>-Nome/<AULA>.<ext>`. É o **mesmo arquivo do professor**, byte a byte, só renomeado pelo slug — fonte legítima, e some do `Notes/INATEL/` com mais frequência do que se espera. Usando essa cópia, avisar o usuário para repor o original.
+   - **Nenhum** → antes de desistir, procurar em `athena-web/public/materials/<CODIGO>-Nome/<AULA>.<ext>`, se essa pasta existir. É o **mesmo arquivo do professor**, byte a byte, só renomeado pelo slug — fonte legítima, e some do `Notes/INATEL/` com mais frequência do que se espera. Usando essa cópia, avisar o usuário para repor o original.
    - **Nem lá** → conhecimento próprio, avisando na página que não veio de material oficial
    - Havendo material, **declarar a fonte no início da resposta** (`Fonte: 12. Compressão de Imagens.pdf`) — erro de match tem que ser visível
 
@@ -77,7 +77,7 @@ athena redo <CODIGO> <AULA>   reprocessa com reescrita forçada
 
 5. **Liga ao MOC da matéria** (ver "Ligações e grafo").
 
-6. **Copia o material oficial** para `athena-web/public/materials/<CODIGO>-Nome/<AULA>.<ext>`, mesma extensão. Sem a cópia, o painel "Original material" fica sem link.
+6. **Copia o material oficial** para `athena-web/public/materials/<CODIGO>-Nome/<AULA>.<ext>`, mesma extensão — **só se `athena-web/` existir neste vault**. Não existindo, PULAR o passo: vault criado pelo app não tem o site dentro, e a partir da 1.0.15 o painel "Material de origem" acha o arquivo em `Notes/INATEL/` pelo `source` da própria página. Faltar `athena-web/` não é motivo para parar o ingest.
 
 7. **Atualiza `index.md` e `log.md`.**
 
