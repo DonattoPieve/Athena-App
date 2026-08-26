@@ -5,3 +5,9 @@ release/
 
 # Cache local do wrangler (worker/)
 .wrangler/
+
+# Travas que o git deixa para tras quando ele roda pela ponte do Cowork: o
+# Linux de la nao tem permissao para apagar arquivo na pasta montada, entao
+# elas sao MOVIDAS para ca em vez de removidas. E lixo, e nao pode contar como
+# "arvore suja" — foi o que barrou o primeiro `npm run lancar`.
+_to_delete/
