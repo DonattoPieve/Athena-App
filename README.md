@@ -102,6 +102,20 @@ O que continua exigindo arquivo de verdade: o ingest. O motor é um agente de
 terminal que roda com `cwd` na raiz do vault e abre o PDF do professor pelo
 caminho — sem pasta não há ingest.
 
+### Prints das telas
+
+```cmd
+npx playwright install chromium    :: uma vez por máquina
+set ATHENA_TELAS_DIR=telas && npm run telas
+npm run telas -- --en
+```
+
+`scripts/telas.mjs` sobe o `dist/renderer` num servidor local, injeta uma ponte
+falsa (sem conta, sem disco) e fotografa sete telas. Precisa de `npm run build`
+antes. É na mão de propósito: tentei três vezes pôr isto no CI e o Playwright
+do runner nunca foi o mesmo que o `npx` instalava — o motivo está anotado no
+topo do `release.yml`, para quem quiser tentar de novo.
+
 ### Lançar uma versão
 
 ```cmd

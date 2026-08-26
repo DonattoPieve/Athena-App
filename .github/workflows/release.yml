@@ -11,14 +11,25 @@ name: release
 # `latest.yml` publica e que o app instalado compara. Se estiverem diferentes, o
 # passo de conferência abaixo quebra o build antes de publicar nada.
 #
+# Houve aqui um job `telas`, que tirava print das telas a cada push na main
+# (ver `scripts/telas.mjs`, que continua funcionando na mão). Foi removido
+# depois de três tentativas, e o que ficou provado no log da última:
+#
+#   - `PLAYWRIGHT_BROWSERS_PATH` chegava certo no passo;
+#   - `npm config get playwright_browsers_path` voltava `undefined`;
+#   - `npx playwright install` baixava o chromium **1234** na pasta certa;
+#   - o `launch` procurava o chromium **1194** em `/opt/pw-browsers`.
+#
+# Ou seja: o `playwright` que o `telas.mjs` importa NÃO é o mesmo que o `npx`
+# instalou — há duas versões em jogo no runner. Quem for tentar de novo começa
+# por aí: `node -p "require('playwright/package.json').version"` e
+# `npx playwright --version` no mesmo passo, antes de qualquer outra hipótese.
+#
 # Para lançar:  npm run lancar
 # (confere, sobe a versão nos dois arquivos, cria a tag anotada e empurra.)
 
 on:
   push:
-    # `main` não builda instalador — só tira os prints (job `telas`), que é
-    # como uma regressão de interface aparece antes de virar Release.
-    branches: [main]
     tags: ["v*"]
   # Deixa disparar à mão pelo site do GitHub, para quando a tag já existe.
   workflow_dispatch:
@@ -108,59 +119,3 @@ jobs:
             exit 0
           fi
           npx --yes wrangler deploy --config worker/wrangler.jsonc
-
-  # ------------------------------------------------------------------
-  # Prints das telas.
-  #
-  # Roda a cada push na main, com a ponte falsa do `telas.mjs` (nada de conta,
-  # nada de disco). É o único jeito de uma regressão de interface aparecer sem
-  # alguém abrir o app — e quem trabalha por uma ponte que só enxerga arquivos
-  # não abre o app nunca.
-  #
-  # Não bloqueia release nenhum: se quebrar, quebra sozinho, e as imagens
-  # ficam no artefato "telas" da execução.
-  # ------------------------------------------------------------------
-  telas:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-
-      # Instalar e usar o Chromium no mesmo passo — e SEM passar pelo `npm run`.
-      #
-      # Historia curta: o `install` obedecia o export e baixava em
-      # `.pw-navegadores/chromium-1234`, e o `launch` ia procurar em
-      # `/opt/pw-browsers/chromium-1194`. Pastas E versoes diferentes.
-      #
-      # A unica diferenca entre os dois comandos era o `npm run` no segundo. A
-      # imagem do runner traz o caminho do Playwright na CONFIG do npm, e o
-      # `npm run` injeta a config dele como `npm_config_*` no processo filho —
-      # que o Playwright tambem le, e que ganha do meu export. Chamando o
-      # `node` direto, essa injecao nao acontece.
-      #
-      # As duas primeiras linhas imprimem o ambiente antes de tentar: se isto
-      # falhar de novo, a resposta vem do log, nao de mais um palpite meu.
-      - name: Prints das telas
-        env:
-          ATHENA_TELAS_DIR: telas
-        run: |
-          export PLAYWRIGHT_BROWSERS_PATH="$PWD/.pw-navegadores"
-          export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
-          env | grep -i playwright || echo "(nenhuma variavel PLAYWRIGHT no ambiente)"
-          npm config get playwright_browsers_path || true
-          npx playwright install --with-deps chromium
-          # So o renderer: o `build` completo tambem compila o main do
-          # Electron, que nao tem nada a ver com print de tela.
-          npx vite build
-          mkdir -p telas
-          node scripts/telas.mjs
-          node scripts/telas.mjs --en
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: telas
-          path: telas/
