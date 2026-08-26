@@ -122,16 +122,6 @@ jobs:
   # ------------------------------------------------------------------
   telas:
     runs-on: ubuntu-latest
-    # Onde o Playwright guarda o navegador, dito por extenso.
-    #
-    # A imagem do runner ja vinha com `PLAYWRIGHT_BROWSERS_PATH` apontando para
-    # `/opt/pw-browsers`, e o `install` e o `launch` acabaram olhando para
-    # lugares diferentes: "Failed to launch chromium because executable doesn't
-    # exist at /opt/pw-browsers/chromium-1194/...". Fixando aqui, no nivel do
-    # job, os dois passos usam a MESMA pasta — e ela e do workspace, onde o
-    # runner escreve sem sudo.
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-navegadores
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -139,19 +129,34 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # `--with-deps` instala as bibliotecas de sistema do Chromium (sudo do
-      # runner); sem elas o navegador existe e nao abre.
-      - run: npx playwright install --with-deps chromium
-      # Só o renderer: o `build` completo também compila o main do Electron,
-      # que não tem nada a ver com print de tela.
-      - run: npx vite build
-      - name: Tirar os prints
+
+      # Instalar o navegador e usar o navegador no MESMO passo, com a pasta
+      # exportada ali dentro.
+      #
+      # A imagem do runner ja vem com `PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers`
+      # (e provavelmente com `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD`), entao o
+      # `install` nao baixava nada e o `launch` procurava em
+      # `/opt/pw-browsers/chromium-1194/...`, que nao existe. Tentei corrigir
+      # com `env:` no nivel do job usando `${{ github.workspace }}` — nao
+      # adiantou: essa expressao nao vale no env do job, virou string vazia, e
+      # a variavel da imagem continuou mandando.
+      #
+      # Um `export` no shell nao tem essa ambiguidade: vale para os comandos
+      # que vem depois dele, no mesmo passo, e ponto.
+      - name: Prints das telas
         env:
           ATHENA_TELAS_DIR: telas
         run: |
+          export PLAYWRIGHT_BROWSERS_PATH="$PWD/.pw-navegadores"
+          export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0
+          npx playwright install --with-deps chromium
+          # So o renderer: o `build` completo tambem compila o main do
+          # Electron, que nao tem nada a ver com print de tela.
+          npx vite build
           mkdir -p telas
           npm run telas
           npm run telas -- --en
+
       - uses: actions/upload-artifact@v4
         with:
           name: telas
