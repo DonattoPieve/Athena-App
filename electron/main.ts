@@ -956,6 +956,22 @@ function registerProtocol() {
       const abs = requireVault().resolve(rel);
       if (fs.existsSync(abs)) return net.fetch(pathToFileURL(abs).toString());
 
+      /*
+       * Imagem de pagina gerada, num vault sem o site dentro.
+       *
+       * A pagina embute `![](/attachments/C09-.../figura.png)`, que o
+       * `siteAssetsParaSrc` traduz para `athena-web/public/attachments/...` —
+       * a copia que o ingest faz PARA O SITE. Vault criado pelo app nao tem
+       * `athena-web/`, entao essa copia nunca existiu e a imagem saia
+       * quebrada na leitura. O original mora em `Notes/attachments/`, com o
+       * mesmo nome de arquivo: e de la que ela vem.
+       */
+      const doSite = /^athena-web\/public\/attachments\/(?:.*\/)?(.+)$/.exec(rel);
+      if (doSite) {
+        const original = requireVault().resolve(`Notes/attachments/${doSite[1]}`);
+        if (fs.existsSync(original)) return net.fetch(pathToFileURL(original).toString());
+      }
+
       // Não está no disco: pode ser material que mora no R2 e ainda não desceu
       // nesta máquina. Abrir o arquivo É o gesto que o traz (ver materiais.ts);
       // da segunda vez em diante sai do cache, sem rede.

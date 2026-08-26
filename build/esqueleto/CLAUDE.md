@@ -168,7 +168,7 @@ Ao encontrar `![[arquivo]]`:
 
 1. **Localizar** em `Notes/attachments/`, depois na raiz do vault, depois na pasta da matéria
 2. **Ler a imagem** — abrir de verdade, não deduzir pelo nome. O que ela mostra vira conteúdo da página
-3. **Copiar** para `athena-web/public/attachments/<CODIGO>-Nome/<nome-slugificado>.<ext>`
+3. **Copiar** para `athena-web/public/attachments/<CODIGO>-Nome/<nome-slugificado>.<ext>` — **se `athena-web/` existir**. Não existindo, pular: o original fica em `Notes/attachments/` e o app acha a imagem por lá, pelo nome do arquivo
 4. **Embutir com markdown padrão**, com legenda própria, onde ilustra o assunto:
    `![legenda](/attachments/C09-Computacao-Grafica/soma-pixel-a-pixel.png)`
 5. **Manter sempre.** Só fica de fora imagem que não ensina nada (tela em branco, print ilegível) — e nesse caso **avisar**, nunca omitir em silêncio
@@ -192,7 +192,7 @@ A página é **referência técnica, não apostila**: frases diretas, densidade 
 Três coisas ficam aqui porque errar nelas quebra o site em silêncio:
 
 - **A ordem das seções é a do professor** (slides do PPT, capítulos do PDF). O template define o *tipo* de seção, nunca a ordem. Informação administrativa fica onde ele apresentou, tipicamente numa `## A disciplina` no início
-- **`source` e `sourceHref` andam sempre juntos**, mais a cópia em `public/materials/`. Um sem o outro vira texto morto no painel "Original material"
+- **`source` e `sourceHref` andam sempre juntos** — e, havendo `athena-web/`, mais a cópia em `public/materials/`. Um sem o outro vira texto morto no painel "Original material". O `source` (nome do arquivo do professor) é o que o app usa para achar o material em `Notes/INATEL/`, então ele nunca pode faltar
 - **A aula não leva campo `type`** — só o review leva (`type: review`)
 
 ---
