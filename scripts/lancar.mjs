@@ -30,20 +30,28 @@ const SECO = args.includes("--seco");
 const tipo = args.find((a) => ["patch", "minor", "major"].includes(a)) ?? "patch";
 
 /**
- * No Windows, `npm` e um `.cmd` — e um `.cmd` so roda por um interpretador.
+ * Rodar `npm` daqui de dentro, sem `.cmd` e sem shell.
  *
- * O caminho obvio seria `shell: true`, e era o que estava aqui: o Node avisa
- * (DEP0190) porque com shell os argumentos sao CONCATENADOS, nao escapados —
- * um argumento com aspas ou `&` deixaria de ser argumento e viraria comando.
- * Chamar `npm.cmd` direto dispensa o shell e o aviso junto. `git` e `.exe`,
- * entao vai como esta.
+ * No Windows o `npm` e um `npm.cmd`, e um `.cmd` nao roda sozinho: precisa de
+ * um interpretador. As duas saidas obvias falham —
+ *
+ *   - `shell: true` funciona, mas o Node avisa (DEP0190) porque com shell os
+ *     argumentos sao CONCATENADOS em vez de escapados;
+ *   - `spawnSync("npm.cmd", ...)` sem shell falha com EINVAL: desde a correcao
+ *     da CVE-2024-27980 o Node se recusa a executar `.cmd`/`.bat` assim.
+ *
+ * A terceira saida e a boa: o proprio npm nos diz onde ele mora. Quando este
+ * script roda por `npm run lancar`, `npm_execpath` aponta para o `npm-cli.js`
+ * — um arquivo .js comum, que o Node executa direto. Sem shell, sem aviso,
+ * sem `.cmd`.
+ *
+ * O `?? "npm"` cobre a chamada direta (`node scripts/lancar.mjs`), onde essa
+ * variavel nao existe: ai o shell e a unica opcao, e o aviso e o preco.
  */
-function binario(cmd) {
-  return process.platform === "win32" && cmd === "npm" ? "npm.cmd" : cmd;
-}
+const NPM_CLI = process.env.npm_execpath ?? null;
 
 function rodar(cmd, argv, { silencioso = false } = {}) {
-  const r = spawnSync(binario(cmd), argv, {
+  const r = spawnSync(cmd, argv, {
     stdio: silencioso ? "pipe" : "inherit",
     encoding: "utf8",
   });
@@ -53,6 +61,14 @@ function rodar(cmd, argv, { silencioso = false } = {}) {
     throw new Error(`falhou: ${cmd} ${argv.join(" ")}`);
   }
   return (r.stdout ?? "").trim();
+}
+
+/** `npm run typecheck` e afins — ver `NPM_CLI` acima. */
+function npm(argv) {
+  if (NPM_CLI) return rodar(process.execPath, [NPM_CLI, ...argv]);
+  const r = spawnSync("npm", argv, { stdio: "inherit", shell: true, encoding: "utf8" });
+  if (r.status !== 0) throw new Error(`falhou: npm ${argv.join(" ")}`);
+  return "";
 }
 
 function parar(mensagem) {
@@ -92,14 +108,14 @@ if (tags) parar(`a tag v${proxima} já existe neste PC. Apague-a ou escolha outr
 /* ---------- verificação ---------- */
 
 console.log("→ typecheck e testes (é aqui que o release para, não no GitHub)\n");
-rodar("npm", ["run", "typecheck"]);
-rodar("npm", ["test"]);
+npm(["run", "typecheck"]);
+npm(["test"]);
 
 /* ---------- versão, tag e push ---------- */
 
 console.log(`\n→ ${versaoAtual} vira ${proxima}\n`);
 // `-m` vira a mensagem do commit E da tag anotada.
-rodar("npm", ["version", tipo, "-m", "%s"]);
+npm(["version", tipo, "-m", "%s"]);
 
 if (SECO) {
   console.log(`\n  ✓ v${proxima} commitada e tagueada. Falta empurrar:\n`);
