@@ -271,9 +271,26 @@ await caso("app baixa pelo HTTP de verdade, com o nome intacto", async () => {
     }
     assert.equal(lista.objetos.length, 3);
   } finally {
-    servidor.close();
+    // Fechar de verdade, e ESPERAR. O `fetch` do Node deixa o socket aberto
+    // (keep-alive), entao um `close()` solto devolve na hora com a conexao
+    // ainda viva — e no Windows o processo morria logo depois com
+    // `Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)`, um aborto do
+    // libuv. O teste imprimia "Tudo certo" e mesmo assim saia com erro, o que
+    // derrubava o `npm test` inteiro por um problema que nao era do Worker.
+    servidor.closeAllConnections?.();
+    await new Promise((ok) => servidor.close(ok));
   }
 });
 
 console.log(falhas ? `\n${falhas} falha(s).\n` : "\nTudo certo.\n");
-process.exit(falhas ? 1 : 0);
+
+// `exitCode` em vez de `process.exit()`: deixa o Node fechar o que ainda
+// estiver aberto em vez de arrancar o processo no meio — foi essa pressa que
+// disparava o aborto do libuv.
+process.exitCode = falhas ? 1 : 0;
+
+// Rede tem tempo proprio: se um socket keep-alive segurar o processo, saia
+// assim mesmo. O veredito ja foi impresso, e travar o `npm test` esperando um
+// socket ocioso seria pior que sair. `unref` para este timer nao ser motivo
+// de o processo continuar vivo.
+setTimeout(() => process.exit(process.exitCode ?? 0), 3000).unref();
