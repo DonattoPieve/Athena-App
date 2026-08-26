@@ -29,12 +29,25 @@ const args = process.argv.slice(2);
 const SECO = args.includes("--seco");
 const tipo = args.find((a) => ["patch", "minor", "major"].includes(a)) ?? "patch";
 
+/**
+ * No Windows, `npm` e um `.cmd` — e um `.cmd` so roda por um interpretador.
+ *
+ * O caminho obvio seria `shell: true`, e era o que estava aqui: o Node avisa
+ * (DEP0190) porque com shell os argumentos sao CONCATENADOS, nao escapados —
+ * um argumento com aspas ou `&` deixaria de ser argumento e viraria comando.
+ * Chamar `npm.cmd` direto dispensa o shell e o aviso junto. `git` e `.exe`,
+ * entao vai como esta.
+ */
+function binario(cmd) {
+  return process.platform === "win32" && cmd === "npm" ? "npm.cmd" : cmd;
+}
+
 function rodar(cmd, argv, { silencioso = false } = {}) {
-  const r = spawnSync(cmd, argv, {
+  const r = spawnSync(binario(cmd), argv, {
     stdio: silencioso ? "pipe" : "inherit",
-    shell: process.platform === "win32",
     encoding: "utf8",
   });
+  if (r.error) throw r.error;
   if (r.status !== 0) {
     if (silencioso && r.stderr) process.stderr.write(r.stderr);
     throw new Error(`falhou: ${cmd} ${argv.join(" ")}`);

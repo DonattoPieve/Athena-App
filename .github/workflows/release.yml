@@ -122,6 +122,16 @@ jobs:
   # ------------------------------------------------------------------
   telas:
     runs-on: ubuntu-latest
+    # Onde o Playwright guarda o navegador, dito por extenso.
+    #
+    # A imagem do runner ja vinha com `PLAYWRIGHT_BROWSERS_PATH` apontando para
+    # `/opt/pw-browsers`, e o `install` e o `launch` acabaram olhando para
+    # lugares diferentes: "Failed to launch chromium because executable doesn't
+    # exist at /opt/pw-browsers/chromium-1194/...". Fixando aqui, no nivel do
+    # job, os dois passos usam a MESMA pasta — e ela e do workspace, onde o
+    # runner escreve sem sudo.
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.pw-navegadores
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -129,6 +139,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # `--with-deps` instala as bibliotecas de sistema do Chromium (sudo do
+      # runner); sem elas o navegador existe e nao abre.
       - run: npx playwright install --with-deps chromium
       # Só o renderer: o `build` completo também compila o main do Electron,
       # que não tem nada a ver com print de tela.

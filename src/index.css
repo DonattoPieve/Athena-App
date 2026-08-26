@@ -2081,6 +2081,19 @@ button.leitura-material:hover {
   text-align: left;
   cursor: pointer;
 }
+/* O codigo da materia no seletor (Ctrl+P). Existia no TSX sem regra nenhuma,
+   entao saia do mesmo tamanho e cor do titulo da aula — duas informacoes de
+   pesos diferentes com o mesmo peso na tela. */
+.item-codigo {
+  flex: 0 0 auto;
+  min-width: 30px;
+  color: var(--c-muted);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+.seletor-item[data-marcado="true"] .item-codigo {
+  color: inherit;
+}
 .seletor-item[data-marcado="true"] {
   background: var(--c-accent-light);
   color: var(--c-accent);

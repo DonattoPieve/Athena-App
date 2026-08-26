@@ -82,6 +82,9 @@ const ROTULO: Record<string, string> = {
   perfil: t("Perfil"),
   "nova-nota": t("Nova nota"),
   glossario: t("Glossário"),
+  // Faltava, e o resultado era uma aba de nome vazio: `ROTULO[a.tipo]` volta
+  // `undefined` e o `<span>` fica em branco. Tipo de aba novo entra aqui.
+  conteudo: t("Meu conteúdo"),
 };
 
 /** Painel que o rail de icones mostra na lateral. */
