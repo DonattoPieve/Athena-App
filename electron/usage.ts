@@ -192,19 +192,37 @@ export async function revisao(
 
       const rel = path.posix.join(dirRel, f);
 
-      let titulo = slug;
+      let conteudo: string;
       try {
-        const conteudo = await vault.read(rel);
-        titulo = /^#\s+(.+)$/m.exec(conteudo)?.[1]?.trim() || slug;
+        conteudo = await vault.read(rel);
       } catch {
         continue; // sumiu entre o listDir e a leitura — nao entra na lista
       }
+      const titulo = /^#\s+(.+)$/m.exec(conteudo)?.[1]?.trim() || slug;
 
+      /**
+       * A data vem do `updated:` da PAGINA, nao do mtime do arquivo.
+       *
+       * mtime e quando o arquivo foi escrito neste disco — e o `pull` reescreve
+       * todas as paginas ao recriar o vault, copiar a pasta faz o mesmo, e o
+       * sync de nuvem tambem. O resultado era a Home jurando que seis aulas de
+       * julho tinham sido "geradas hoje", o que apaga justamente a informacao
+       * que a fila de revisao existe para dar: o que esta velho.
+       *
+       * O `updated:` e escrito pelo ingest, viaja junto com o conteudo no
+       * publish/pull e nao muda quando o arquivo e copiado. O mtime fica de
+       * reserva, para pagina sem frontmatter.
+       */
+      const doTexto = /^updated:\s*'?"?(\d{4}-\d{2}-\d{2})/m.exec(conteudo)?.[1];
       let geradaEm: string;
-      try {
-        geradaEm = fs.statSync(vault.resolve(rel)).mtime.toISOString();
-      } catch {
-        continue;
+      if (doTexto) {
+        geradaEm = new Date(`${doTexto}T12:00:00`).toISOString();
+      } else {
+        try {
+          geradaEm = fs.statSync(vault.resolve(rel)).mtime.toISOString();
+        } catch {
+          continue;
+        }
       }
 
       out.push({ rel, titulo, materia: nomeMateria(pastaMateria), geradaEm });
