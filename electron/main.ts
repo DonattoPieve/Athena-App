@@ -136,6 +136,13 @@ function attachVault(root: string) {
   // Vault novo, pull novo: sem isto, trocar de conta abriria a pasta da outra
   // sem puxar nada.
   jaPuxou = false;
+
+  // E veredito novo. O `.ingest-status` e de cada pasta, mas o painel Publicar
+  // so o relia quando o watcher acusava escrita — trocar de conta ou criar
+  // vault novo nao escreve nada, entao a tela ficava com o status da pasta
+  // anterior: vault recem-criado aparecia como "o ultimo comando nao concluiu".
+  void pushStatus();
+  send("vault:changed", null);
 }
 
 /** Roda o publish/pull do vault jogando a saida no transcript da sessao. */
@@ -178,8 +185,18 @@ async function afterJob(state: "done" | "failed", cmd?: Cmd) {
 
   const status = await vault.ingestStatus();
   if (status !== "OK") {
+    // "NONE" e "FAIL" querem dizer coisas diferentes, e nenhuma das duas siglas
+    // diz nada a quem acabou de ver uma pagina ser gerada. NONE e o arquivo
+    // AUSENTE: ou o vault e antigo (nasceu sem ele), ou o comando escreveu o
+    // status noutra pasta — o proprio CLAUDE.md avisa que caminho relativo
+    // depois de trocar de diretorio cria o arquivo no lugar errado.
     runner?.log(
-      `Comando terminou sem OK no .ingest-status (${status}) — nada foi publicado.`,
+      status === "NONE"
+        ? "Nao achei o .ingest-status na raiz do vault, entao nada foi publicado. " +
+            "O comando deveria escrever FAIL no comeco e OK no fim, sempre na RAIZ. " +
+            'Se a pagina ficou boa, publique pelo botao "Publicar" na aba Comandos.'
+        : "O comando terminou com FAIL no .ingest-status — nada foi publicado. " +
+            "Isso e proposital: ingest interrompido nao deixa nada no banco.",
       "error",
     );
     return;
@@ -332,6 +349,10 @@ function guardarVaultDaConta(pasta: string) {
 /** Desanexa tudo — usado ao sair e ao entrar numa conta que ainda nao tem vault. */
 function soltarVault() {
   vault = null;
+  // O veredito e do vault, nao da janela. Sem esta linha o painel Publicar
+  // continua mostrando o FAIL do vault anterior depois do logout, e oferece
+  // "Publicar assim mesmo" para conteudo que nem esta mais aberto.
+  send("status:changed", "NONE");
   runner?.removeAllListeners();
   runner = null;
   watcher?.close();

@@ -224,19 +224,28 @@ export class ClaudeRunner extends EventEmitter {
    *
    * Sem isto, um `OK` de meia hora atras sobrevive a um ingest que falhou
    * no meio, e o botao Publicar libera a publicacao de conteudo pela metade.
-   * O caminho em athena-web/ tambem some: o ingest as vezes grava o status
-   * relativo depois de mudar de diretorio, e o arquivo perdido la engana.
+   *
+   * A raiz recebe `FAIL` ESCRITO, nao apagado. Apagar deixava o arquivo
+   * ausente, e comando que pula o passo 0 do CLAUDE.md terminava em `NONE`:
+   * o app entao recusava publicar reclamando de um arquivo que nao existe,
+   * depois de a pagina ja ter sido gerada — foi o defeito relatado em vault
+   * criado pelo app. Escrever FAIL aqui e fazer o passo 0 pelo app: o default
+   * do sistema e nao publicar, e o passo 8 troca por `OK` quando deu tudo certo.
+   *
+   * O caminho em athena-web/ continua sendo APAGADO: o ingest as vezes grava
+   * o status relativo depois de mudar de diretorio, e o arquivo perdido la
+   * engana quem for olhar.
    */
   private clearStatus() {
-    for (const p of [
-      path.join(this.vaultRoot, ".ingest-status"),
-      path.join(this.vaultRoot, "athena-web", ".ingest-status"),
-    ]) {
-      try {
-        fs.rmSync(p, { force: true });
-      } catch {
-        // arquivo travado/ausente nao impede o comando de rodar
-      }
+    try {
+      fs.writeFileSync(path.join(this.vaultRoot, ".ingest-status"), "FAIL\n", "utf8");
+    } catch {
+      // disco cheio ou arquivo travado nao impede o comando de rodar
+    }
+    try {
+      fs.rmSync(path.join(this.vaultRoot, "athena-web", ".ingest-status"), { force: true });
+    } catch {
+      // arquivo travado/ausente nao impede o comando de rodar
     }
   }
 

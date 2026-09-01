@@ -99,6 +99,7 @@ export async function criarVault(destino: string): Promise<void> {
       "(definido no `CLAUDE.md`): página — fonte — situação da nota do aluno.\n",
     "utf8",
   );
+
   await fs.writeFile(
     path.join(destino, "index.md"),
     "# Índice — Athena\n\n" +
