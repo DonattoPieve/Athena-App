@@ -436,9 +436,35 @@ function registerIpc() {
     if (res.canceled || !res.filePaths[0]) return { path: vault?.root ?? null };
     const chosen = res.filePaths[0];
     if (!Vault.isVault(chosen)) {
-      throw new Error(
-        "Essa pasta nao parece o vault do Athena — nao encontrei CLAUDE.md e Notes/.",
-      );
+      // Pasta VAZIA e o caso comum de quem clicou em "Usar outra pasta": a
+      // pessoa criou a pasta ali mesmo, no seletor, para comecar do zero. Antes
+      // isso batia num erro que pedia CLAUDE.md e Notes/ — arquivos que so o
+      // proprio app sabe escrever, e que ela nao tinha como pos ali. Entao o
+      // app pergunta e os escreve, em vez de mandar a pessoa se virar.
+      //
+      // Pasta com coisa dentro continua recusada: derramar o esqueleto do
+      // vault dentro de uma pasta escolhida por engano e estrago que nao se
+      // desfaz com um clique.
+      const vazia = fs.readdirSync(chosen).filter((n) => n !== ".DS_Store" && n !== "Thumbs.db");
+      if (vazia.length > 0) {
+        throw new Error(
+          "Essa pasta nao parece o vault do Athena — nao encontrei CLAUDE.md e Notes/. " +
+            "Escolha a pasta que ja tem seus arquivos, ou uma pasta vazia para comecar um vault novo.",
+        );
+      }
+      const r = await dialog.showMessageBox({
+        type: "question",
+        buttons: ["Criar o vault aqui", "Cancelar"],
+        defaultId: 0,
+        cancelId: 1,
+        message: "Comecar um vault novo nesta pasta?",
+        detail:
+          `${chosen}\n\n` +
+          "A pasta esta vazia. Vou escrever nela os arquivos que o Athena precisa " +
+          "(CLAUDE.md, Notes/, Resumos/) e depois voce pode baixar da conta o que ja existe.",
+      });
+      if (r.response !== 0) return { path: vault?.root ?? null };
+      await bootstrap.criarVault(chosen);
     }
     guardarVaultDaConta(chosen);
     attachVault(chosen);
