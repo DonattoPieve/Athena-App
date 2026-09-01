@@ -301,6 +301,16 @@ export function Settings({
           iguais: r.iguais,
         }),
       ];
+      if (r.atualizados) {
+        partes.push(tf("{n} atualizado(s) da conta.", { n: r.atualizados }));
+      }
+      if (r.maisNovos.length) {
+        partes.push(
+          tf("{n} daqui está(ão) mais novo(s) — publique para mandar.", {
+            n: r.maisNovos.length,
+          }),
+        );
+      }
       if (r.conflitos.length) {
         partes.push(
           tf("{n} já existiam diferentes e não foram tocados.", { n: r.conflitos.length }),

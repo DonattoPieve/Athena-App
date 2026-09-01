@@ -148,6 +148,28 @@ npm run esqueleto:sincronizar    :: copia do vault para o app
 A fonte é o **vault**; o app é espelho. Sem vault à vista (o CI) o conferir
 diz isso e sai com 0 — por isso ele pode morar dentro do `npm test`.
 
+### Puxar da conta: quem vence quando os dois lados divergem
+
+O `baixarTudo` (o `athena pull` sem terminal) nunca sobrescrevia nada. Isso
+protegia contra perder o que só existe neste PC e abria o buraco oposto: página
+regerada no notebook e publicada **nunca chegava** no outro computador — o pull
+dizia "conflito" e seguia. E publicar do PC atrasado mandava a versão velha de
+volta para o banco, aí a nova sumia de verdade.
+
+O desempate é o `updated:` que a própria página carrega (não o mtime, que o
+próprio pull reescreve). A regra é pura e testada em `electron/sincronia.ts`:
+
+| situação | o que acontece |
+|---|---|
+| não existe aqui | cria |
+| mesmo conteúdo | não mexe |
+| a da conta é mais nova | **sobrescreve**, com cópia em `.athena/lixeira/` |
+| a daqui é mais nova | mantém e **avisa para publicar** |
+| datas iguais, ou sem data dos dois lados | conflito: o disco fica |
+
+Nota do aluno (`notes`) não tem data no banco, então cai sempre em conflito —
+texto que a pessoa escreveu não se sobrescreve por palpite.
+
 ### Guardas de escrita
 
 As invariantes do `CLAUDE.md` são código, não promessa:

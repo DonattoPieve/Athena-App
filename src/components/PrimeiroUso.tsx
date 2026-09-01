@@ -131,6 +131,11 @@ export function PrimeiroUso({
               criados: r.criados,
               iguais: r.iguais,
             })}
+            {r.atualizados > 0 &&
+              " " +
+                tf("{n} atualizado(s) com a versão da conta, que era mais nova.", {
+                  n: r.atualizados,
+                })}
           </p>
           {r.conflitos.length > 0 && (
             <div className="pu-alerta">
@@ -146,6 +151,28 @@ export function PrimeiroUso({
                   </p>
                 ))}
               </div>
+            </div>
+          )}
+          {r.maisNovos.length > 0 && (
+            <div className="pu-alerta">
+              <strong>
+                {tf("{n} arquivo(s) daqui estão mais novos que os da conta:", {
+                  n: r.maisNovos.length,
+                })}
+              </strong>
+              <div className="pu-log">
+                {r.maisNovos.map((m) => (
+                  <p key={m} className="pu-log-linha">
+                    {m}
+                  </p>
+                ))}
+              </div>
+              {/* Sem isto a pessoa acha que está tudo sincronizado — e o
+                  próximo publish deste PC é que resolveria, mas ninguém sabe
+                  que precisa publicar. */}
+              <p className="pu-aviso">
+                {t("Publique deste computador para mandá-los para a sua conta.")}
+              </p>
             </div>
           )}
           {r.semR2 && (

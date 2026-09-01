@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { app } from "electron";
 import { clienteAutenticado } from "./account";
 import { urlWorker } from "./materiais";
+import { decidir } from "./sincronia";
 
 /**
  * Primeiro uso — monta um vault Athena do zero, pela interface.
@@ -17,13 +18,17 @@ import { urlWorker } from "./materiais";
  *                      (mesmas tabelas do Supabase, mesmo formato de arquivo)
  *                      sem depender do `athena-web` estar clonado
  *
- * REGRA DE OURO, em todo este arquivo: nunca sobrescrever nem apagar arquivo
- * do usuário. Pasta não-vazia faz `criarVault` recusar; arquivo que já existe
- * com conteúdo diferente do banco é reportado como conflito e NÃO é tocado —
- * mesmo por baixo, mais restrito que o `athena-pull.mjs` original, que troca
- * peça por peça só o que está sem `--force`, mas sobrescreve binário do R2
- * incondicionalmente. Aqui não: é sempre "nunca sem `--force`", porque não
- * existe `--force` nesta tela.
+ * REGRA DE OURO, em todo este arquivo: nunca PERDER trabalho do usuário.
+ * Pasta não-vazia faz `criarVault` recusar. Arquivo divergente só é
+ * sobrescrito quando a versão da conta é comprovadamente mais nova (pelo
+ * `updated:` que a própria página carrega — ver `sincronia.ts`), e mesmo aí
+ * uma cópia do que estava aqui vai antes para `.athena/lixeira/`. Sem data
+ * dos dois lados, ou com datas iguais, continua valendo o disco e a linha vai
+ * como conflito.
+ *
+ * O "nunca sobrescrever" puro, que valia antes, protegia contra perder o
+ * local e criava o buraco oposto: página regerada noutro PC nunca chegava
+ * aqui, e publicar deste lado mandava a versão velha de volta.
  */
 
 /* ------------------------------------------------------------------ *
@@ -127,6 +132,10 @@ export async function criarVault(destino: string): Promise<void> {
 export type ResultadoBootstrap = {
   criados: number;
   iguais: number;
+  /** Sobrescritos porque a versão da conta era mais nova (cópia guardada). */
+  atualizados: number;
+  /** A sua cópia é mais nova que a da conta — mantida, e você precisa publicar. */
+  maisNovos: string[];
   /** Arquivos que já existiam com conteúdo diferente do banco — não tocados. */
   conflitos: string[];
   /** O Worker do R2 não respondeu (ou não foi publicado): PDFs/anexos não vieram. */
@@ -146,7 +155,14 @@ export async function baixarTudo(
   destino: string,
   onLinha: (s: string) => void,
 ): Promise<ResultadoBootstrap> {
-  const stats: ResultadoBootstrap = { criados: 0, iguais: 0, conflitos: [], semR2: false };
+  const stats: ResultadoBootstrap = {
+    criados: 0,
+    iguais: 0,
+    atualizados: 0,
+    maisNovos: [],
+    conflitos: [],
+    semR2: false,
+  };
 
   const { supabase, user } = await clienteAutenticado(destino);
   const nome = (user.user_metadata as Record<string, unknown> | undefined)?.name ?? user.email;
@@ -199,6 +215,9 @@ export async function baixarTudo(
       (atual) => mesmoConteudo(atual, p.content as string, fm),
       stats,
       onLinha,
+      // O desempate sai do `updated` da propria pagina — o mesmo campo que o
+      // ingest escreve e que viaja no publish. Ver `sincronia.ts`.
+      fm.updated === undefined ? null : paraTexto(fm.updated),
     );
   }
 
@@ -233,14 +252,23 @@ export async function baixarTudo(
     );
   }
 
-  onLinha(
-    `\n${stats.criados} criado(s), ${stats.iguais} já igual(is)` +
-      (stats.conflitos.length ? `, ${stats.conflitos.length} conflito(s) — veja acima.` : "."),
-  );
+  const partes = [`${stats.criados} criado(s)`, `${stats.iguais} já igual(is)`];
+  if (stats.atualizados) partes.push(`${stats.atualizados} atualizado(s) da conta`);
+  if (stats.maisNovos.length) partes.push(`${stats.maisNovos.length} mais novo(s) aqui`);
+  if (stats.conflitos.length) partes.push(`${stats.conflitos.length} conflito(s)`);
+  onLinha(`\n${partes.join(", ")}${stats.conflitos.length || stats.maisNovos.length ? " — veja acima." : "."}`);
   return stats;
 }
 
-/** Escreve respeitando a regra de ouro: nunca sobrescreve o que já existe e diverge. */
+/**
+ * Escreve o que veio do banco, decidindo o que fazer quando o arquivo já
+ * existe e diverge. A regra está em `sincronia.ts`; aqui é só a mão que
+ * executa — inclusive a cópia de segurança antes de sobrescrever.
+ *
+ * `updatedBanco` só é passado para PÁGINA. Nota do aluno (`notes`) não tem
+ * data no banco, e sem data não há desempate: ela cai sempre em conflito, que
+ * é o certo — texto que a pessoa escreveu não se sobrescreve por palpite.
+ */
 async function gravar(
   caminho: string,
   conteudo: string,
@@ -248,23 +276,80 @@ async function gravar(
   comparar: (atual: string) => boolean,
   stats: ResultadoBootstrap,
   onLinha: (s: string) => void,
+  updatedBanco?: string | null,
 ): Promise<void> {
-  if (!fsSync.existsSync(caminho)) {
-    await fs.mkdir(path.dirname(caminho), { recursive: true });
-    await fs.writeFile(caminho, conteudo, "utf8");
-    stats.criados++;
-    onLinha(`  + ${rotulo}`);
-    return;
-  }
+  const existe = fsSync.existsSync(caminho);
+  const atual = existe ? await fs.readFile(caminho, "utf8") : "";
+  const decisao = decidir({
+    existe,
+    igual: existe && comparar(atual),
+    updatedLocal: existe ? parseFrontmatter(atual).data.updated : null,
+    updatedBanco,
+  });
 
-  const atual = await fs.readFile(caminho, "utf8");
-  if (comparar(atual)) {
-    stats.iguais++;
-    return;
-  }
+  switch (decisao.acao) {
+    case "criar":
+      await fs.mkdir(path.dirname(caminho), { recursive: true });
+      await fs.writeFile(caminho, conteudo, "utf8");
+      stats.criados++;
+      onLinha(`  + ${rotulo}`);
+      return;
 
-  stats.conflitos.push(rotulo);
-  onLinha(`  ! ${rotulo} já existe com conteúdo diferente do banco — não sobrescrito`);
+    case "igual":
+      stats.iguais++;
+      return;
+
+    case "atualizar": {
+      // A cópia vai ANTES de escrever. Se a máquina cair no meio, o que se
+      // perde é a cópia, não o original.
+      const copia = await guardarCopia(caminho, rotulo);
+      await fs.writeFile(caminho, conteudo, "utf8");
+      stats.atualizados++;
+      onLinha(
+        `  ↑ ${rotulo} — a da conta é mais nova (${decisao.banco} > ${decisao.local})` +
+          (copia ? `; a sua ficou em ${copia}` : ""),
+      );
+      return;
+    }
+
+    case "local-mais-novo":
+      stats.maisNovos.push(rotulo);
+      onLinha(
+        `  = ${rotulo} — a SUA é mais nova (${decisao.local} > ${decisao.banco}); ` +
+          `mantida. Publique deste computador para mandá-la para a conta`,
+      );
+      return;
+
+    case "conflito":
+      stats.conflitos.push(rotulo);
+      onLinha(`  ! ${rotulo} já existe com conteúdo diferente do banco — não sobrescrito`);
+      return;
+  }
+}
+
+/**
+ * Cópia do que estava no disco, antes de o banco passar por cima.
+ *
+ * Mesmo lugar e mesmo nome que o `vault.arquivar()` usa antes de um `redo`:
+ * `.athena/lixeira/<carimbo>__<caminho com __>`. A pasta começa com ponto,
+ * então a árvore não a mostra — é rede de segurança, não conteúdo.
+ */
+async function guardarCopia(caminho: string, rotulo: string): Promise<string | null> {
+  try {
+    const conteudo = await fs.readFile(caminho, "utf8");
+    const raiz = caminho.slice(0, caminho.length - rotulo.split("/").join(path.sep).length);
+    const carimbo = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const nome = `${carimbo}__${rotulo.split("/").join("__")}`;
+    const destino = path.join(raiz, ".athena", "lixeira", nome);
+    await fs.mkdir(path.dirname(destino), { recursive: true });
+    await fs.writeFile(destino, conteudo, "utf8");
+    return path.posix.join(".athena/lixeira", nome);
+  } catch {
+    // Sem a cópia, NÃO sobrescreve seria mais seguro — mas quem chama já
+    // decidiu que a versão da conta e mais nova, e recusar aqui deixaria o PC
+    // atrasado para sempre. Segue, sem a rede.
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------------ *

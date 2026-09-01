@@ -138,7 +138,11 @@ export type EstadoAtualizacao =
 export type ResultadoBootstrap = {
   criados: number;
   iguais: number;
-  /** Arquivos que já existiam com conteúdo diferente do banco — não tocados. */
+  /** Sobrescritos porque a versão da conta era mais nova; a antiga foi guardada. */
+  atualizados: number;
+  /** A cópia deste PC é mais nova que a da conta — mantida; falta publicar. */
+  maisNovos: string[];
+  /** Divergentes sem data que desempate — não tocados. */
   conflitos: string[];
   /** R2 não estava configurado nesta máquina: PDFs/anexos não foram baixados. */
   semR2: boolean;
