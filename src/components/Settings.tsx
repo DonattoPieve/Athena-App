@@ -3,7 +3,29 @@ import { api, mensagemDeErro, type ClaudeConta } from "../lib/api";
 import { t, tf, idioma, trocarIdioma, type Idioma } from "../lib/i18n";
 import "../styles/config.css";
 
-export const PALETAS = ["purple", "cyan", "blue", "matrix", "amber", "pink", "red"] as const;
+/**
+ * A primeira e o PADRAO do Athena (bronze), e vive no `:root` do index.css —
+ * por isso nao tem bloco `[data-palette=...]` proprio. As outras sete sao
+ * trocas de acento, o roxo entre elas: ele era o padrao antigo, com o nome
+ * "purple", e virou mais uma opcao quando o app ganhou cor propria.
+ */
+export const PALETAS = [
+  "bronze",
+  "violet",
+  "cyan",
+  "blue",
+  "matrix",
+  "amber",
+  "pink",
+  "red",
+] as const;
+
+/** "purple" gravado por versao anterior e o roxo de hoje. Ver index.html. */
+function paletaSalva(): string {
+  const p = localStorage.getItem("athena-palette");
+  if (!p) return "bronze";
+  return p === "purple" ? "violet" : p;
+}
 
 /**
  * Preferências gravadas pelo main (arquivo de config do Electron) — contrato
@@ -55,7 +77,7 @@ export function useTemaPaleta() {
   const [tema, setTema] = useState<"dark" | "light">(
     () => (localStorage.getItem("athena-theme") as "dark" | "light") ?? "dark",
   );
-  const [paleta, setPaleta] = useState(() => localStorage.getItem("athena-palette") ?? "purple");
+  const [paleta, setPaleta] = useState(paletaSalva);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", tema);
@@ -132,7 +154,7 @@ export function CfgSwitch({
   );
 }
 
-/** Tema (Escuro/Claro) + cor de destaque (as 7 paletas) — usado pela aba
+/** Tema (Escuro/Claro) + cor de destaque (as 8 paletas) — usado pela aba
  * Aparência das Configurações e pela aba Preferências do Perfil, sempre nos
  * mesmos `localStorage` via `useTemaPaleta`. */
 export function CampoTemaPaleta() {

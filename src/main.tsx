@@ -1,8 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
-// A JetBrains Mono vem empacotada, nao do sistema: o desenho das telas depende
-// dela, e maquina sem a fonte instalada cairia num monoespacado qualquer.
+// A JetBrains Mono vem empacotada, nao do sistema. Ela nao e mais a fonte da
+// INTERFACE (ver index.css) — hoje vale em caminho de arquivo, codigo, saida
+// do Claude e no editor em modo markdown, onde coluna alinhada importa. A
+// interface usa a sans do sistema, que nao precisa de download.
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/600.css";

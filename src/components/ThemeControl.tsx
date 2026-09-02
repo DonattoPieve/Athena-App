@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { t } from "../lib/i18n";
 
-const PALETTES = ["purple", "cyan", "blue", "matrix", "amber", "pink", "red"] as const;
+const PALETTES = ["bronze", "violet", "cyan", "blue", "matrix", "amber", "pink", "red"] as const;
 
 export function ThemeControl() {
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [palette, setPalette] = useState<string>("purple");
+  const [palette, setPalette] = useState<string>("bronze");
 
   useEffect(() => {
     setTheme((localStorage.getItem("athena-theme") as "dark" | "light") ?? "dark");
-    setPalette(localStorage.getItem("athena-palette") ?? "purple");
+    setPalette(localStorage.getItem("athena-palette") ?? "bronze");
   }, []);
 
   useEffect(() => {

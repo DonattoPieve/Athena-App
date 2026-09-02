@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-theme="dark" data-palette="purple">
+<html lang="pt-BR" data-theme="dark" data-palette="bronze">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,6 +9,10 @@
         try {
           var t = localStorage.getItem("athena-theme");
           var p = localStorage.getItem("athena-palette");
+          // "purple" era o NOME do padrao antigo. Hoje o padrao e o bronze e o
+          // roxo virou uma paleta como as outras: quem tinha escolhido roxo
+          // continua no roxo, e quem nunca mexeu recebe a cor nova.
+          if (p === "purple") p = "violet";
           if (t) document.documentElement.setAttribute("data-theme", t);
           if (p) document.documentElement.setAttribute("data-palette", p);
         } catch (e) {}

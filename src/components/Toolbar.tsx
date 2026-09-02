@@ -38,18 +38,18 @@ export function Toolbar({ editor, onLink }: { editor: Editor; onLink?: () => voi
       <Group>
         <Tool label="B" active={s.bold} bold onClick={() => c().toggleBold().run()} />
         <Tool label="i" active={s.italic} italic onClick={() => c().toggleItalic().run()} />
-        <Tool label="`code`" active={s.code} onClick={() => c().toggleCode().run()} />
+        <Tool label={t("código")} active={s.code} onClick={() => c().toggleCode().run()} />
       </Group>
 
       <Group>
         <Tool label={t("lista")} active={s.bullet} onClick={() => c().toggleBulletList().run()} />
-        <Tool label="1." active={s.ordered} onClick={() => c().toggleOrderedList().run()} />
+        <Tool label={t("numerada")} active={s.ordered} onClick={() => c().toggleOrderedList().run()} />
         <Tool label={t("tarefa")} active={s.task} onClick={() => c().toggleTaskList().run()} />
       </Group>
 
       <Group>
         <Tool label={t("citação")} active={s.quote} onClick={() => c().toggleBlockquote().run()} />
-        <Tool label={t("bloco de código")} active={s.codeBlock} onClick={() => c().toggleCodeBlock().run()} />
+        <Tool label={t("bloco")} active={s.codeBlock} onClick={() => c().toggleCodeBlock().run()} />
         <Tool label="—" title={t("linha divisória")} onClick={() => c().setHorizontalRule().run()} />
       </Group>
 

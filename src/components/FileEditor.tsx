@@ -47,6 +47,14 @@ export function FileEditor({
   const nome = rel.split("/").pop() ?? rel;
   const sujo = body !== original;
   const sel = parseSelection(rel);
+  /**
+   * Titulo legivel a partir do nome do arquivo: sem `.md` e com a primeira
+   * letra maiuscula. Nao mexe no resto — `introdução ao endereçamento de
+   * rede.md` vira `Introdução ao endereçamento de rede`, e um nome que ja
+   * veio com maiusculas continua como o dono escreveu.
+   */
+  const titulo = nome.replace(/\.md$/i, "").replace(/^./, (c) => c.toUpperCase());
+  const pasta = rel.slice(0, rel.length - nome.length);
 
   async function salvar() {
     setErro(null);
@@ -62,17 +70,26 @@ export function FileEditor({
 
   return (
     <div className="card" style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        <span className="label">{t("Editando")}</span>
-        <code style={{ color: "var(--c-accent)", fontSize: 12 }}>{nome}</code>
+      {/* Sem o rotulo "EDITANDO": voce sabe que esta editando porque tem um
+          campo de texto na sua frente. O que a tela precisa dizer e QUAL aula. */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <h2 className="editor-titulo">{titulo}</h2>
         <span
-          style={{ marginLeft: "auto", fontSize: 11, color: sujo ? "#ba7517" : "var(--c-muted)" }}
+          style={{
+            marginLeft: "auto",
+            paddingTop: 3,
+            fontSize: 12,
+            whiteSpace: "nowrap",
+            color: sujo ? "#ba7517" : "var(--c-muted)",
+          }}
         >
           {carregando ? t("abrindo…") : sujo ? t("não salvo") : salvo ? t("salvo") : t("sem alterações")}
         </span>
       </div>
 
-      <p style={{ margin: 0, fontSize: 11, color: "var(--c-muted)" }}>{rel}</p>
+      {/* Materia na frente do caminho: e a resposta a "de que aula e isto",
+          que o nome do arquivo sozinho nao da. */}
+      <p className="editor-caminho">{sel ? `${sel.code} · ${pasta}` : rel}</p>
 
       {!carregando && (
         <MarkdownEditor
@@ -88,20 +105,12 @@ export function FileEditor({
 
       {erro && <p style={{ margin: 0, color: "#e24b4a", fontSize: 12 }}>{erro}</p>}
 
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button className="btn" disabled={!sujo} onClick={salvar}>
-          {t("Salvar")}
-        </button>
-        <button
-          className="btn"
-          disabled={!sujo}
-          onClick={() => {
-            setBody(original);
-            setSalvo(false);
-          }}
-        >
-          {t("Descartar")}
-        </button>
+      {/*
+        A ordem diz o que a tela e para: "Gerar pagina" e a acao, Salvar e
+        manutencao, e Descartar apaga o que voce acabou de escrever — por isso
+        foi para o canto oposto, longe do dedo.
+      */}
+      <div className="editor-acoes">
         {sel?.lesson && (
           <button
             className="btn btn-primary"
@@ -112,6 +121,19 @@ export function FileEditor({
             {t("Gerar página")}
           </button>
         )}
+        <button className="btn" disabled={!sujo} onClick={salvar}>
+          {t("Salvar")}
+        </button>
+        <button
+          className="btn btn-fim"
+          disabled={!sujo}
+          onClick={() => {
+            setBody(original);
+            setSalvo(false);
+          }}
+        >
+          {t("Descartar")}
+        </button>
       </div>
     </div>
   );

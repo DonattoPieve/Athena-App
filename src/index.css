@@ -6,29 +6,33 @@
    ------------------------------------------------------------------ */
 
 :root {
-  --c-bg: #fbfafd;
-  --c-surface: #f3eff8;
+  /* Bronze sobre pedra clara. Atena e bronze, oliveira e marmore — e o par
+     quase-preto + violeta que estava aqui e a assinatura visual de todo app
+     gerado por IA desde 2023. O violeta nao sumiu: virou uma das paletas
+     trocaveis, ao lado das outras seis. Ver DESIGN.md §2. */
+  --c-bg: #faf8f4;
+  --c-surface: #f2ede4;
   --c-card: #ffffff;
-  --c-border: #e4dcef;
-  --c-text: #1a1423;
-  --c-muted: #6e6580;
-  --c-accent: #5a189a;
-  --c-accent-light: #f0e6fa;
-  --c-code-bg: #240046;
-  --c-code-text: #e0aaff;
+  --c-border: #e5ddd0;
+  --c-text: #1c1913;
+  --c-muted: #6f695d;
+  --c-accent: #8a5e17;
+  --c-accent-light: #f6ecd9;
+  --c-code-bg: #23201a;
+  --c-code-text: #e8c98a;
   /* Bloco de codigo dentro da prosa. Separado do terminal da sessao de
      proposito: no site ele escurece no dark, o terminal daqui nao. */
-  --c-prose-code-bg: #240046;
+  --c-prose-code-bg: #23201a;
 
-  --sv-accent: #5a189a;
-  --sv-bright: #b15cff;
-  --sv-mid: #7b2cbf;
-  --sv-deep: #3c096c;
-  --sv-glow: #e0aaff;
+  --sv-accent: #8a5e17;
+  --sv-bright: #d0a250;
+  --sv-mid: #a97c2a;
+  --sv-deep: #4a3208;
+  --sv-glow: #f0d9a8;
 
-  --dots: rgba(90, 24, 154, 0.09);
-  --shadow-card: 0 1px 2px rgba(36, 0, 70, 0.05), 0 4px 16px rgba(36, 0, 70, 0.07);
-  --shadow-card-hover: 0 2px 4px rgba(36, 0, 70, 0.08), 0 12px 28px rgba(36, 0, 70, 0.16);
+  --dots: rgba(138, 94, 23, 0.08);
+  --shadow-card: 0 1px 2px rgba(40, 28, 8, 0.05), 0 4px 16px rgba(40, 28, 8, 0.07);
+  --shadow-card-hover: 0 2px 4px rgba(40, 28, 8, 0.08), 0 12px 28px rgba(40, 28, 8, 0.16);
 
   --r-sm: 4px;
   --r-md: 8px;
@@ -38,21 +42,26 @@
 }
 
 [data-theme="dark"] {
-  --c-bg: #0a0a0c;
-  --c-surface: #16161a;
-  --c-card: #101013;
-  --c-border: #27272e;
-  --c-text: #f5f5f7;
-  --c-muted: #8c8c96;
-  --c-accent: #b15cff;
-  --c-accent-light: rgba(177, 92, 255, 0.14);
-  --c-prose-code-bg: #101014;
-  --dots: rgba(177, 92, 255, 0.1);
+  /* Cinza NEUTRO, nao azulado: #0a0a0c puxava para o azul e, com o acento
+     violeta em cima, dava no mesmo tema escuro de sempre. */
+  --c-bg: #0f0f10;
+  --c-surface: #1a1a1b;
+  --c-card: #141415;
+  --c-border: #2a2a2c;
+  --c-text: #f2f0ec;
+  --c-muted: #8f8b83;
+  --c-accent: #d0a250;
+  --c-accent-light: rgba(208, 162, 80, 0.14);
+  --c-prose-code-bg: #141416;
+  --dots: rgba(208, 162, 80, 0.1);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.45);
   --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 28px rgba(0, 0, 0, 0.55);
 }
 
 /* Paletas trocaveis — so o acento muda, a estrutura permanece. */
+[data-palette="violet"] { --c-accent: #5a189a; --sv-accent: #5a189a; --sv-bright: #b15cff; --sv-mid: #7b2cbf; --sv-glow: #e0aaff; --c-accent-light: #f0e6fa; --dots: rgba(90,24,154,.09); }
+[data-theme="dark"][data-palette="violet"] { --c-accent: #b15cff; --c-accent-light: rgba(177,92,255,.14); --dots: rgba(177,92,255,.1); }
+
 [data-palette="cyan"] { --c-accent: #0e7490; --sv-accent: #0e7490; --sv-bright: #22d3ee; --sv-glow: #a5f3fc; --c-accent-light: #dff7fb; --dots: rgba(14,116,144,.09); }
 [data-theme="dark"][data-palette="cyan"] { --c-accent: #22d3ee; --c-accent-light: rgba(34,211,238,.14); --dots: rgba(34,211,238,.1); }
 
@@ -82,9 +91,21 @@
   --color-accent-light: var(--c-accent-light);
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --font-prose: Arial, Helvetica, sans-serif;
+  /* Fonte da INTERFACE. Nada e baixado: no Windows e a Segoe UI Variable, que
+     ja esta la. Ver `--font-mono` logo acima para onde a mono continua. */
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui,
+    -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 
-/* Fonte unica na UI: JetBrains Mono em toda a chrome (DESIGN.md §3). */
+/*
+ * A mono deixou de ser a fonte da INTERFACE.
+ *
+ * Ela era usada em tudo — menu, botao, rotulo — e "estetica de terminal" e
+ * hoje o default de quem nao escolheu fonte, nao uma escolha. Continua onde
+ * significa alguma coisa: caminho de arquivo, codigo, saida do Claude, e o
+ * editor em modo markdown, onde o alinhamento de coluna importa. Ver a regra
+ * de `code, kbd, samp, pre` mais abaixo.
+ */
 html,
 body,
 #root {
@@ -131,14 +152,30 @@ body {
   background-image: radial-gradient(var(--dots) 1px, transparent 1px);
   background-size: 22px 22px;
   color: var(--c-text);
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  font-size: 13px;
+  font-family: var(--font-ui);
+  /* Meio ponto a mais que os 13px da mono: sans desenha mais estreito e
+     menor, e sem isto a interface inteira pareceria ter encolhido. */
+  font-size: 13.5px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 
-/* Prosa: unica troca de fonte do sistema — sinaliza "conteudo, nao interface". */
+/* O que continua monoespacado, agora que a interface nao e mais. */
+code,
+kbd,
+samp,
+pre,
+pre.term,
+.mono-edit,
+.item-codigo,
+.materia-code,
+.lateral-vault-caminho {
+  font-family: var(--font-mono);
+}
+
+/* Prosa: fonte do SITE, byte a byte — a nota tem que parecer a mesma coisa
+   nos dois lugares. Nao seguir a troca da interface e de proposito. */
 .prose-body {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 1rem;
@@ -381,19 +418,25 @@ body {
    Editor (Tiptap). A area editavel usa .prose: o que voce digita ja
    aparece com a medida do site, sem "preview" separado.
    ------------------------------------------------------------------ */
+/*
+ * SEM moldura. O editor ja mora dentro de um card, e card dentro de card era
+ * o que fazia a tela parecer um monte de caixinha empilhada: a hierarquia
+ * estava sendo feita por borda em vez de por espaco. Aqui sobra uma linha so,
+ * embaixo da barra de ferramentas, separando o que de fato precisa.
+ */
 .editor-shell {
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-xl);
-  background: var(--c-card);
-  overflow: hidden;
-  transition: border-color 160ms, box-shadow 160ms;
+  background: transparent;
 }
-.editor-shell:focus-within {
-  border-color: color-mix(in srgb, var(--c-accent) 60%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 10%, transparent);
+/* Foco sem anel: a linha da barra de ferramentas acende. Feedback tem que
+   existir — foi a moldura que saiu, nao o retorno visual. */
+.editor-shell:focus-within .toolbar {
+  border-bottom-color: color-mix(in srgb, var(--c-accent) 55%, var(--c-border));
+}
+.toolbar {
+  transition: border-color 160ms;
 }
 .editor-shell .ProseMirror {
-  padding: 18px 22px 24px;
+  padding: 18px 2px 24px;
   min-height: 300px;
   max-height: 50vh;
   overflow-y: auto;
@@ -423,32 +466,76 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  padding: 7px 8px;
+  gap: 2px;
+  padding: 0 0 9px;
   border-bottom: 1px solid var(--c-border);
-  background: var(--c-surface);
+  background: transparent;
 }
+/*
+ * Os grupos existiam e nao apareciam: 3px de gap dentro, 4px fora e um risco
+ * da cor da borda. Catorze botoes iguais em fila viram uma parede. Agora a
+ * separacao e por ESPACO, que e o que o olho realmente le.
+ */
 .toolbar-group {
   display: flex;
-  gap: 3px;
-  padding-right: 7px;
-  margin-right: 4px;
-  border-right: 1px solid var(--c-border);
-}
-.toolbar-group:last-child {
+  gap: 1px;
+  padding-right: 0;
+  margin-right: 12px;
   border-right: none;
 }
+.toolbar-group:last-child {
+  margin-right: 0;
+}
 .btn.tool {
-  padding: 3px 8px;
-  font-size: 11px;
+  padding: 4px 9px;
+  font-size: 12.5px;
   border-radius: var(--r-sm);
   background: transparent;
   border-color: transparent;
   color: var(--c-muted);
 }
 .btn.tool:hover:not(:disabled) {
-  background: var(--c-card);
-  color: var(--c-accent);
+  background: var(--c-surface);
+  color: var(--c-text);
+}
+/* Ativo e SOLIDO: o estado do cursor tem que ser visivel de relance, e a
+   borda tenue de antes se perdia no meio dos outros treze. */
+.btn.tool[data-active="true"] {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-bg);
+  font-weight: 600;
+}
+
+/* Rodape de acoes: a linha substitui a borda do card que sumiu. */
+.editor-acoes {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  border-top: 1px solid var(--c-border);
+  padding-top: 14px;
+}
+.editor-acoes .btn-fim {
+  margin-left: auto;
+}
+
+/* Cabecalho do editor: o ASSUNTO e a maior coisa da tela. Antes o nome do
+   arquivo era um <code> de 12px ao lado de um rotulo em caixa alta — o rotulo
+   gritava e o assunto sussurrava. */
+.editor-titulo {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+  color: var(--c-text);
+  overflow-wrap: anywhere;
+}
+.editor-caminho {
+  margin: 0 0 16px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--c-muted);
 }
 
 /* Modo markdown: texto exatamente como vai para o disco. */
@@ -586,11 +673,13 @@ body {
   white-space: pre-wrap;
 }
 
+/* Rotulo de secao. Era 10px em CAIXA ALTA com letter-spacing — o tique mais
+   reconhecivel do estilo, e ilegivel de tao pequeno. Caixa normal, um ponto
+   maior, e o peso fazendo o trabalho que o espacamento fazia mal. */
 .label {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0;
   color: var(--c-muted);
 }
 
@@ -742,9 +831,7 @@ body {
 }
 .stat-rotulo {
   margin-top: 4px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11.5px;
   color: var(--c-muted);
 }
 .stat-sub {
@@ -1326,9 +1413,8 @@ span.avatar {
 }
 .leitura-rotulo {
   margin: 0 0 8px;
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--c-muted);
 }
 
@@ -1782,9 +1868,8 @@ button.leitura-material:hover {
 }
 .tc-titulo {
   margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--c-muted);
 }
 .tc-linha-topo { display: flex; align-items: center; gap: 8px; }
