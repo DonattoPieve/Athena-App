@@ -996,7 +996,6 @@ export default function App() {
         ativo={destinoAtivo}
         onIr={ir}
         explorer={explorerLateral}
-        vaultPath={vaultPath}
       />
       {divisoria}
       {principal}

@@ -22,8 +22,7 @@ import {
  * toda vez.
  *
  * A coluna é uma pilha de partes com alturas diferentes: cabeçalho e menu têm
- * o tamanho do conteúdo, o Explorer come o que sobrar (é ele que rola), e o
- * rodapé do vault fica colado embaixo.
+ * o tamanho do conteúdo, e o Explorer come o que sobrar (é ele que rola).
  */
 
 export type Destino =
@@ -52,14 +51,12 @@ export function Sidebar({
   ativo,
   onIr,
   explorer,
-  vaultPath,
 }: {
   conta: Account;
   ativo: Destino | null;
   onIr: (d: Destino) => void;
   /** A árvore do vault, montada pelo App — a lateral só reserva o espaço. */
   explorer: React.ReactNode;
-  vaultPath: string;
 }) {
   return (
     <aside className="lateral">
@@ -101,7 +98,6 @@ export function Sidebar({
 
       <div className="lateral-explorer">{explorer}</div>
 
-      <VaultRodape caminho={vaultPath} />
       <BotaoAtualizacao />
     </aside>
   );
@@ -168,42 +164,3 @@ function BotaoAtualizacao() {
   );
 }
 
-/**
- * Rodapé do vault: onde ele está e quanto ele ocupa.
- *
- * O tamanho é medido de verdade (soma dos arquivos do disco). A barra precisa
- * de um teto para ter comprimento, e teto de disco local não existe — ela usa
- * o maior valor entre 10 GB e o dobro do que já está em uso, para nunca
- * aparecer cheia e sugerir um limite que ninguém impôs.
- */
-function VaultRodape({ caminho }: { caminho: string }) {
-  const [bytes, setBytes] = useState<number | null>(null);
-
-  useEffect(() => {
-    api.vault.tamanho().then(setBytes).catch(() => setBytes(null));
-  }, [caminho]);
-
-  const gb = (bytes ?? 0) / 1024 ** 3;
-  const teto = Math.max(10, Math.ceil(gb * 2));
-  const pct = bytes === null ? 0 : Math.min(100, (gb / teto) * 100);
-
-  return (
-    <div className="lateral-vault">
-      <div className="lateral-vault-topo">
-        <span>Vault</span>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          <path d="m8 9 4-4 4 4M8 15l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-      <p className="lateral-vault-caminho" title={caminho}>
-        {caminho}
-      </p>
-      <div className="barra" style={{ height: 4 }}>
-        <div className="barra-cheio" style={{ width: `${pct}%` }} />
-      </div>
-      <p className="lateral-vault-uso">
-        {bytes === null ? "—" : `${gb.toFixed(1)} GB / ${teto} GB`}
-      </p>
-    </div>
-  );
-}

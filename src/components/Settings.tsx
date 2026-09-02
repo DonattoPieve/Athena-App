@@ -281,6 +281,15 @@ export function Settings({
   const [baixando, setBaixando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState<string | null>(null);
+  /** Tamanho do vault em disco, ja formatado. null = ainda medindo. */
+  const [tamanho, setTamanho] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.vault
+      .tamanho()
+      .then((b) => setTamanho(`${(b / 1024 ** 3).toFixed(1)} GB`))
+      .catch(() => setTamanho(null));
+  }, [vaultPath]);
 
   useEffect(() => {
     api.vault.get().then((v) => setClaudeBin(v.claudeBin));
@@ -619,6 +628,11 @@ export function Settings({
             <strong style={{ fontSize: 13 }}>{t("Onde ficam seus arquivos")}</strong>
             <p style={{ margin: 0, fontSize: 11.5, color: "var(--c-muted)" }}>
               <code>{vaultPath}</code>
+              {/* O tamanho morava num card na lateral que ninguem clicava e que
+                  ainda desenhava uma seta de "trocar" sem trocar nada. A
+                  informacao e util; o card nao era. Aqui ela fica ao lado do
+                  caminho, que e a outra metade da mesma pergunta. */}
+              {tamanho !== null && <> · {tamanho}</>}
             </p>
             <p style={{ margin: 0, fontSize: 11.5, color: "var(--c-muted)" }}>
               {t(

@@ -169,8 +169,7 @@ pre,
 pre.term,
 .mono-edit,
 .item-codigo,
-.materia-code,
-.lateral-vault-caminho {
+.materia-code {
   font-family: var(--font-mono);
 }
 
@@ -1812,31 +1811,6 @@ button.leitura-material:hover {
   .lateral-atualizacao[data-fase="pronta"] .lateral-atualizacao-luz { animation: none; }
 }
 
-.lateral-vault {
-  flex: 0 0 auto;
-  margin: 0 10px 10px;
-  padding: 9px 11px;
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-lg);
-  background: var(--c-card);
-}
-.lateral-vault-topo {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  font-weight: 500;
-}
-.lateral-vault-topo svg { color: var(--c-muted); }
-.lateral-vault-caminho {
-  margin: 1px 0 8px;
-  font-size: 10.5px;
-  color: var(--c-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lateral-vault-uso { margin: 6px 0 0; font-size: 10px; color: var(--c-muted); }
 
 /* ================================================================== *
  * TASK CENTER
