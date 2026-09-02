@@ -34,6 +34,19 @@
   --shadow-card: 0 1px 2px rgba(40, 28, 8, 0.05), 0 4px 16px rgba(40, 28, 8, 0.07);
   --shadow-card-hover: 0 2px 4px rgba(40, 28, 8, 0.08), 0 12px 28px rgba(40, 28, 8, 0.16);
 
+  /*
+   * Largura da coluna de leitura. UM numero: mexer aqui move a pagina inteira.
+   *
+   * Em px, e nao em `ch`, de proposito. `ch` mede a fonte do CONTAINER (a sans
+   * da interface, 13.5px) e o texto la dentro e a prosa em Arial 19px — as
+   * duas contas nao batem, e "78ch" acabava significando coisas diferentes
+   * conforme a fonte da interface mudasse.
+   *
+   * 520px da ~55 caracteres por linha na prosa. Medida de livro: acima de ~75
+   * o olho erra a linha de volta; abaixo de ~45 a leitura vira serrote.
+   */
+  --medida-leitura: 520px;
+
   --r-sm: 4px;
   --r-md: 8px;
   --r-lg: 10px;
@@ -1370,18 +1383,27 @@ span.avatar {
 /* Centralizada: em monitor largo o texto colado na esquerda deixa meia tela
    vazia à direita e a linha de leitura fica longe do olho. O bloco inteiro
    (texto + lateral) vai para o meio. */
+/*
+ * O TEXTO no meio da tela, nao o bloco.
+ *
+ * Era um flex de duas colunas centralizado como conjunto: com o indice de
+ * 232px a direita, o texto acabava empurrado para a esquerda do centro
+ * optico — a pagina parecia encostada na borda mesmo com `margin: auto`.
+ *
+ * Grid de tres faixas resolve: as duas de fora sao iguais (1fr), entao a do
+ * meio cai exatamente no centro, com ou sem indice. Abaixo de 1100px o indice
+ * some e o texto continua centrado, sem regra extra.
+ */
 .leitura {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--medida-leitura)) minmax(0, 1fr);
   gap: 32px;
-  align-items: flex-start;
+  align-items: start;
   width: 100%;
-  max-width: 1120px;
-  margin: 0 auto;
 }
 .leitura-texto {
-  flex: 1;
+  grid-column: 2;
   min-width: 0;
-  max-width: 78ch; /* linha longa demais cansa; o site usa a mesma ordem */
 }
 .leitura-titulo {
   margin: 0 0 2px;
@@ -1397,8 +1419,9 @@ span.avatar {
 
 /* Abaixo de 1100px a lateral roubaria a largura do texto — some. */
 .leitura-lado {
-  width: 232px;
-  flex: 0 0 auto;
+  grid-column: 3;
+  width: 100%;
+  max-width: 232px;
 }
 @media (max-width: 1100px) {
   .leitura-lado { display: none; }
