@@ -1422,16 +1422,30 @@ span.avatar {
   grid-column: 3;
   width: 100%;
   max-width: 232px;
+  /*
+   * `stretch` e o que faz o `position: sticky` la dentro funcionar.
+   *
+   * Sticky so anda DENTRO da caixa do pai: com a coluna do tamanho do proprio
+   * conteudo (que e o que `align-items: start` do grid faz), nao sobra por
+   * onde andar, e o painel simplesmente rolava junto com o texto. Esticando a
+   * coluna ate a altura da linha inteira, o sticky ganha o percurso.
+   */
+  align-self: stretch;
 }
 @media (max-width: 1100px) {
   .leitura-lado { display: none; }
 }
 .leitura-sticky {
   position: sticky;
-  top: 0;
+  /* Nao encostado no topo: o sticky gruda na borda do scroller, e a folga do
+     `.conteudo` rola embora junto com o texto. */
+  top: 10px;
   display: flex;
   flex-direction: column;
   gap: 22px;
+  /* Indice comprido nao pode passar da tela: aqui ele rola por conta. */
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
 }
 .leitura-rotulo {
   margin: 0 0 8px;
